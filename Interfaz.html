@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkedOpt — Optimizador de Horarios</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:        #0f1117;
+      --surface:   #161b27;
+      --surface2:  #1c2333;
+      --border:    #2a3347;
+      --border-h:  #3d5070;
+      --cyan:      #38bdf8;
+      --cyan-bg:   rgba(56,189,248,.1);
+      --amber:     #fbbf24;
+      --amber-bg:  rgba(251,191,36,.1);
+      --green:     #34d399;
+      --green-bg:  rgba(52,211,153,.1);
+      --purple:    #a78bfa;
+      --purple-bg: rgba(167,139,250,.1);
+      --red:       #f87171;
+      --red-bg:    rgba(248,113,113,.1);
+      --t1:        #f1f5f9;
+      --t2:        #94a3b8;
+      --t3:        #475569;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', sans-serif;
+      --r:         6px;
+      --r2:        10px;
+      --sw:        220px;
+      --th:        56px;
+      --ease:      .15s ease;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--t1);
+      min-height: 100vh;
+      display: flex;
+    }
+    input, select, button { font-family: inherit; }
+    button { cursor: pointer; border: none; background: none; outline: none; }
+    input, select { outline: none; }
+
+    /* ── SIDEBAR ──────────────────────────────── */
+    .sidebar {
+      position: fixed; top: 0; left: 0;
+      width: var(--sw); height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      z-index: 100;
+    }
+    .sb-logo {
+      height: var(--th);
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sb-logo-mark {
+      width: 28px; height: 28px;
+      background: var(--cyan);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .sb-logo-mark svg { width: 15px; height: 15px; }
+    .sb-logo-text { font-weight: 700; font-size: .9rem; color: var(--t1); }
+    .sb-logo-ver  { font-size: .68rem; color: var(--t3); font-family: var(--mono); }
+
+    .sb-nav { padding: 12px 8px; flex: 1; }
+    .sb-label {
+      font-size: .65rem; font-family: var(--mono);
+      color: var(--t3); letter-spacing: .1em; text-transform: uppercase;
+      padding: 0 10px; margin: 4px 0 6px;
+    }
+    .sb-item {
+      display: flex; align-items: center; gap: 9px;
+      padding: 8px 10px; border-radius: var(--r);
+      color: var(--t2); font-size: .83rem; font-weight: 500;
+      cursor: pointer; transition: background var(--ease), color var(--ease);
+      margin-bottom: 1px;
+    }
+    .sb-item:hover { background: var(--surface2); color: var(--t1); }
+    .sb-item.active { background: var(--cyan-bg); color: var(--cyan); }
+    .sb-item svg { width: 15px; height: 15px; flex-shrink: 0; }
+    .sb-badge {
+      margin-left: auto;
+      background: var(--surface2); color: var(--t2);
+      font-family: var(--mono); font-size: .65rem;
+      padding: 2px 7px; border-radius: 10px;
+      border: 1px solid var(--border);
+      min-width: 22px; text-align: center;
+    }
+    .sb-item.active .sb-badge { background: var(--cyan-bg); color: var(--cyan); border-color: rgba(56,189,248,.25); }
+
+    .sb-footer { padding: 12px; border-top: 1px solid var(--border); }
+    .status-row {
+      display: flex; align-items: center; gap: 7px;
+      padding: 7px 10px;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r);
+      font-size: .75rem; color: var(--t2);
+    }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+
+    /* ── TOPBAR ───────────────────────────────── */
+    .topbar {
+      position: fixed; top: 0; left: var(--sw); right: 0;
+      height: var(--th);
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center;
+      padding: 0 24px; gap: 16px; z-index: 90;
+    }
+    .topbar-title { font-size: .9rem; font-weight: 600; margin-right: auto; }
+    .topbar-sub   { font-size: .72rem; color: var(--t3); font-family: var(--mono); }
+
+    .steps { display: flex; align-items: center; }
+    .step {
+      display: flex; align-items: center; gap: 7px;
+      padding: 5px 14px; font-size: .78rem; font-weight: 500;
+      color: var(--t3); cursor: pointer; transition: color var(--ease);
+    }
+    .step:hover { color: var(--t2); }
+    .step-n {
+      width: 20px; height: 20px; border-radius: 50%;
+      border: 1.5px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: .68rem;
+      transition: var(--ease); flex-shrink: 0;
+    }
+    .step.active { color: var(--cyan); }
+    .step.active .step-n { background: var(--cyan); border-color: var(--cyan); color: #000; }
+    .step.done .step-n   { background: var(--green); border-color: var(--green); color: #000; }
+    .step-line { width: 28px; height: 1px; background: var(--border); transition: background .3s; }
+    .step-line.done { background: var(--green); }
+
+    /* ── MAIN ─────────────────────────────────── */
+    .main { margin-left: var(--sw); margin-top: var(--th); flex: 1; padding: 28px 28px 48px; }
+
+    .panel { display: none; }
+    .panel.active { display: block; animation: fadeUp .25s ease; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)} }
+
+    .ph { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+    .ph-icon {
+      width: 36px; height: 36px;
+      background: var(--surface2); border: 1px solid var(--border); border-radius: var(--r);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .ph-icon svg { width: 17px; height: 17px; }
+    .ph-title { font-size: 1.1rem; font-weight: 700; }
+    .ph-desc  { font-size: .8rem; color: var(--t2); margin-top: 2px; }
+
+    /* ── CARD ─────────────────────────────────── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--r2); padding: 20px; margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: .72rem; font-family: var(--mono);
+      color: var(--t3); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 14px;
+    }
+
+    /* ── FORM ─────────────────────────────────── */
+    .fg   { display: grid; gap: 12px; }
+    .fg-2 { grid-template-columns: 1fr 1fr; }
+    .fg-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .fg-5 { grid-template-columns: 2fr 1fr 1fr 1fr auto; align-items: flex-end; }
+
+    .fl { display: flex; flex-direction: column; gap: 5px; }
+    .lbl { font-size: .72rem; font-weight: 500; color: var(--t2); }
+    .lbl .req { color: var(--cyan); }
+
+    .inp {
+      width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r);
+      padding: 8px 11px; font-size: .86rem; color: var(--t1); transition: border-color var(--ease);
+    }
+    .inp:focus { border-color: var(--cyan); }
+    .inp::placeholder { color: var(--t3); }
+    .inp[type=number]::-webkit-inner-spin-button { opacity: .5; }
+
+    select.inp {
+      appearance: none; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23475569' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px;
+    }
+    select.inp option { background: var(--surface2); }
+
+    .cat-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .cat-btn {
+      padding: 7px 13px; border-radius: var(--r); font-size: .8rem; font-weight: 500;
+      border: 1px solid var(--border); color: var(--t2); background: var(--bg); transition: var(--ease);
+    }
+    .cat-btn:hover { border-color: var(--border-h); color: var(--t1); }
+    .cat-btn.cb.sel  { background: var(--purple-bg); color: var(--purple); border-color: rgba(167,139,250,.4); }
+    .cat-btn.hum.sel { background: var(--green-bg);  color: var(--green);  border-color: rgba(52,211,153,.4);  }
+    .cat-btn.sw.sel  { background: var(--amber-bg);  color: var(--amber);  border-color: rgba(251,191,36,.4);  }
+    .cat-btn.cb:hover  { color: var(--purple); }
+    .cat-btn.hum:hover { color: var(--green); }
+    .cat-btn.sw:hover  { color: var(--amber); }
+
+    /* ── BUTTONS ──────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: var(--r); font-size: .83rem; font-weight: 600;
+      transition: var(--ease); white-space: nowrap;
+    }
+    .btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .btn-primary { background: var(--cyan); color: #000; }
+    .btn-primary:hover { filter: brightness(1.1); }
+    .btn-ghost { background: var(--surface2); color: var(--t1); border: 1px solid var(--border); }
+    .btn-ghost:hover { border-color: var(--border-h); }
+    .btn-danger { background: var(--red-bg); color: var(--red); border: 1px solid rgba(248,113,113,.2); }
+    .btn-danger:hover { background: rgba(248,113,113,.18); }
+    .btn-sm { padding: 5px 10px; font-size: .76rem; }
+    .btn-lg { padding: 11px 28px; font-size: .92rem; }
+
+    .nav-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+    /* ── TABLE ────────────────────────────────── */
+    .table-wrap { border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    thead tr { background: var(--surface2); }
+    th {
+      padding: 9px 12px; text-align: left;
+      font-family: var(--mono); font-size: .67rem; color: var(--t3);
+      text-transform: uppercase; letter-spacing: .09em;
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    td {
+      padding: 10px 12px; font-size: .82rem; color: var(--t2);
+      border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,.02); }
+    .td-mono { font-family: var(--mono); font-size: .76rem; color: var(--cyan); }
+    .td-main { color: var(--t1); font-weight: 500; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 8px; border-radius: 4px; font-size: .72rem; font-family: var(--mono);
+    }
+    .badge-cyan   { background: var(--cyan-bg);   color: var(--cyan);   border: 1px solid rgba(56,189,248,.2);  }
+    .badge-purple { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(167,139,250,.2); }
+    .badge-green  { background: var(--green-bg);  color: var(--green);  border: 1px solid rgba(52,211,153,.2);  }
+    .badge-amber  { background: var(--amber-bg);  color: var(--amber);  border: 1px solid rgba(251,191,36,.2);  }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--t3); font-size: .82rem; }
+    .empty-state .ei { font-size: 1.6rem; margin-bottom: 8px; opacity: .5; }
+
+    /* ── PROF GRID ────────────────────────────── */
+    .prof-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(320px,1fr)); gap: 14px; }
+    .prof-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2);
+      padding: 18px; animation: fadeUp .2s ease; transition: border-color var(--ease);
+    }
+    .prof-card:hover { border-color: var(--border-h); }
+    .prof-head {
+      display: flex; align-items: center; gap: 9px;
+      margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+    }
+    .prof-av {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--surface2); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--mono); font-size: .75rem; font-weight: 600; color: var(--cyan); flex-shrink: 0;
+    }
+    .prof-name-d { font-size: .87rem; font-weight: 600; color: var(--t1); }
+    .prof-code-d { font-size: .7rem; font-family: var(--mono); color: var(--t3); }
+    .prof-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .assign-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 10px; }
+    .assign-row select { flex: 1; }
+    .chips-wrap { display: flex; flex-wrap: wrap; gap: 5px; min-height: 28px; }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 8px 3px 7px; border-radius: 20px; font-size: .73rem; font-weight: 500;
+      animation: chipIn .15s ease;
+    }
+    @keyframes chipIn { from{opacity:0;transform:scale(.88)}to{opacity:1;transform:scale(1)} }
+    .chip.cb  { background: var(--purple-bg); color: var(--purple); border: 1px solid rgba(167,139,250,.25); }
+    .chip.hum { background: var(--green-bg);  color: var(--green);  border: 1px solid rgba(52,211,153,.25);  }
+    .chip.sw  { background: var(--amber-bg);  color: var(--amber);  border: 1px solid rgba(251,191,36,.25);  }
+    .chip-x {
+      width: 13px; height: 13px; border-radius: 50%; background: rgba(255,255,255,.08);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: .65rem; cursor: pointer; flex-shrink: 0; transition: background var(--ease);
+    }
+    .chip-x:hover { background: var(--red-bg); color: var(--red); }
+    .chips-empty { font-size: .76rem; color: var(--t3); font-style: italic; }
+
+    /* ── SUMMARY ──────────────────────────────── */
+    .sum-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
+    .sum-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2);
+      padding: 18px; text-align: center;
+    }
+    .sum-val { font-family: var(--mono); font-size: 2rem; font-weight: 700; color: var(--cyan); line-height: 1; margin-bottom: 4px; }
+    .sum-lbl { font-size: .72rem; color: var(--t3); text-transform: uppercase; letter-spacing: .08em; font-family: var(--mono); }
+
+    .run-area { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); padding: 28px; text-align: center; }
+    .run-title { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+    .run-desc  { font-size: .81rem; color: var(--t2); margin-bottom: 18px; }
+
+    /* ── TOAST ────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 20px; right: 20px;
+      background: var(--surface); border: 1px solid rgba(248,113,113,.4); border-radius: var(--r2);
+      padding: 12px 16px; color: var(--red); font-size: .82rem;
+      display: flex; align-items: center; gap: 8px;
+      max-width: 300px; z-index: 200;
+      transform: translateY(60px); opacity: 0; transition: transform .2s ease, opacity .2s ease;
+    }
+    .toast.on { transform: translateY(0); opacity: 1; }
+    .toast svg { flex-shrink: 0; width: 15px; height: 15px; }
+
+    #hidden-form { display: none; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border-h); border-radius: 3px; }
+
+    @media (max-width: 860px) {
+      :root { --sw: 0px; }
+      .sidebar { display: none; }
+      .topbar { left: 0; }
+      .fg-5 { grid-template-columns: 1fr 1fr; }
+      .fg-5 .fl:last-child { grid-column: 1/-1; }
+    }
+    @media (max-width: 580px) {
+      .fg-2, .fg-3 { grid-template-columns: 1fr; }
+      .sum-row { grid-template-columns: 1fr; }
+      .step-label { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── SIDEBAR ───────────────────────────────────────── -->
+<aside class="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logo-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round">
+        <rect x="3" y="4" width="18" height="16" rx="2"/>
+        <path d="M3 10h18M8 4v6M16 4v6"/>
+      </svg>
+    </div>
+    <div>
+      <div class="sb-logo-text">SkedOpt</div>
+      <div class="sb-logo-ver">v2.1</div>
+    </div>
+  </div>
+  <nav class="sb-nav">
+    <div class="sb-label">Flujo</div>
+    <div class="sb-item active" onclick="goto(1)" id="nav-1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+      </svg>
+      Materias
+      <span class="sb-badge" id="b-mat">0</span>
+    </div>
+    <div class="sb-item" onclick="goto(2)" id="nav-2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75M21 21v-2a4 4 0 0 0-3-3.87"/>
+      </svg>
+      Profesores
+      <span class="sb-badge" id="b-prof">0</span>
+    </div>
+    <div class="sb-item" onclick="goto(3)" id="nav-3">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+      </svg>
+      Parámetros
+      <span class="sb-badge" id="b-par">—</span>
+    </div>
+  </nav>
+  <div class="sb-footer">
+    <div class="status-row"><div class="dot"></div><span>Solver disponible</span></div>
+  </div>
+</aside>
+
+<!-- ── TOPBAR ─────────────────────────────────────────── -->
+<header class="topbar">
+  <div style="margin-right:auto;">
+    <div class="topbar-title">Optimizador de Horarios</div>
+  </div>
+  <div class="topbar-sub">INGENIERÍA DE SISTEMAS</div>
+  <div class="steps">
+    <div class="step active" onclick="goto(1)" id="s1">
+      <div class="step-n">1</div><span class="step-label">Materias</span>
+    </div>
+    <div class="step-line" id="sl1"></div>
+    <div class="step" onclick="goto(2)" id="s2">
+      <div class="step-n">2</div><span class="step-label">Profesores</span>
+    </div>
+    <div class="step-line" id="sl2"></div>
+    <div class="step" onclick="goto(3)" id="s3">
+      <div class="step-n">3</div><span class="step-label">Parámetros</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── MAIN ───────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- SECCIÓN 1 ─────────────────────────────────────── -->
+  <div class="panel active" id="p1">
+    <div class="ph">
+      <div class="ph-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.8" stroke-linecap="round">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+      </div>
+      <div>
+        <div class="ph-title">Registro de Materias</div>
+        <div class="ph-desc">Agrega cada materia con su código, grupos, intensidad horaria y categoría.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Nueva materia</div>
+      <div class="fg fg-5" style="margin-bottom:14px;">
+        <div class="fl">
+          <label class="lbl">Nombre <span class="req">*</span></label>
+          <input id="m-nombre" class="inp" type="text" placeholder="Ej: Cálculo Diferencial" />
+        </div>
+        <div class="fl">
+          <label class="lbl">Código / ID <span class="req">*</span></label>
+          <input id="m-codigo" class="inp" type="text" placeholder="MAT-101" />
+        </div>
+        <div class="fl">
+          <label class="lbl">Grupos <span class="req">*</span></label>
+          <input id="m-grupos" class="inp" type="number" placeholder="2" min="1" max="20" />
+        </div>
+        <div class="fl">
+          <label class="lbl">Horas / semana <span class="req">*</span></label>
+          <input id="m-horas" class="inp" type="number" placeholder="4" min="1" max="40" />
+        </div>
+        <div class="fl">
+          <button class="btn btn-primary" onclick="addMateria()" style="width:100%;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Agregar
+          </button>
+        </div>
+      </div>
+      <div>
+        <div class="lbl" style="margin-bottom:8px;">Categoría <span class="req">*</span></div>
+        <div class="cat-group">
+          <button class="cat-btn cb"  onclick="setCat(this,'Ciencias Básicas')">Ciencias Básicas</button>
+          <button class="cat-btn hum" onclick="setCat(this,'Humanidades')">Humanidades</button>
+          <button class="cat-btn sw"  onclick="setCat(this,'Software')">Software</button>
+        </div>
+      </div>
+      <input type="hidden" id="m-cat" />
+    </div>
+
+    <div class="card">
+      <div class="card-title">Materias registradas</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>Nombre</th><th>Código</th><th>Grupos</th><th>Intensidad</th><th>Categoría</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tb-mat">
+            <tr><td colspan="7"><div class="empty-state"><div class="ei">📚</div><div>No hay materias registradas.</div></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn btn-primary" onclick="goto(2)">
+        Continuar a Profesores
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 2 ─────────────────────────────────────── -->
+  <div class="panel" id="p2">
+    <div class="ph">
+      <div class="ph-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75M21 21v-2a4 4 0 0 0-3-3.87"/>
+        </svg>
+      </div>
+      <div>
+        <div class="ph-title">Configuración de Profesores</div>
+        <div class="ph-desc">Define el número de docentes y asígnales materias.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Generar tarjetas</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="fl">
+          <label class="lbl">Número de profesores</label>
+          <input id="n-prof" class="inp" type="number" min="1" max="50" placeholder="5" style="width:150px;" />
+        </div>
+        <button class="btn btn-ghost" onclick="genProfs()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Generar
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="clearProfs()" style="margin-left:auto;align-self:flex-end;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="13" height="13"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4h8v2"/></svg>
+          Limpiar todo
+        </button>
+      </div>
+    </div>
+
+    <div class="prof-grid" id="pg"></div>
+
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="goto(1)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Volver
+      </button>
+      <button class="btn btn-primary" onclick="goto(3)">
+        Continuar a Parámetros
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 3 ─────────────────────────────────────── -->
+  <div class="panel" id="p3">
+    <div class="ph">
+      <div class="ph-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.8" stroke-linecap="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+        </svg>
+      </div>
+      <div>
+        <div class="ph-title">Parámetros del Modelo</div>
+        <div class="ph-desc">Revisa el resumen y configura el tiempo antes de ejecutar.</div>
+      </div>
+    </div>
+
+    <div class="sum-row">
+      <div class="sum-card"><div class="sum-val" id="sm-mat">0</div><div class="sum-lbl">Materias</div></div>
+      <div class="sum-card"><div class="sum-val" id="sm-prof">0</div><div class="sum-lbl">Profesores</div></div>
+      <div class="sum-card"><div class="sum-val" id="sm-asig">0</div><div class="sum-lbl">Asignaciones</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title">Tiempo de ejecución</div>
+      <div style="max-width:340px;">
+        <div class="fl">
+          <label class="lbl">Tiempo máximo <span class="req">*</span></label>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <input id="t-ms" class="inp" type="number" min="100" placeholder="30000" style="flex:1;" />
+            <span style="font-size:.78rem;color:var(--t3);white-space:nowrap;font-family:var(--mono);">ms</span>
+          </div>
+          <span style="font-size:.73rem;color:var(--t3);margin-top:3px;">Recomendado: 10000 ms para instancias pequeñas.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="run-area">
+      <div class="run-title">¿Listo para optimizar?</div>
+      <div class="run-desc">Se enviará la configuración completa al solver de programación entera.</div>
+      <button class="btn btn-primary btn-lg" onclick="run()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        Ejecutar Optimización
+      </button>
+    </div>
+
+    <div class="nav-row" style="margin-top:16px;">
+      <button class="btn btn-ghost" onclick="goto(2)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        Volver
+      </button>
+    </div>
+  </div>
+
+</main>
+
+<form id="hidden-form" method="POST" action="{% url 'optimize' %}">
+  {% csrf_token %}
+  <input type="hidden" id="p-mat"  name="materias" />
+  <input type="hidden" id="p-prof" name="profesores" />
+  <input type="hidden" id="p-t"    name="tiempo_ms" />
+</form>
+
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+  </svg>
+  <span id="t-msg"></span>
+</div>
+
+<script>
+'use strict';
+
+let mats=[], profs=[], mSeq=0, pSeq=0, cur=1, selCat='';
+
+/* ── NAVIGATION ─────────────────────────────── */
+const checkSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" width="9" height="9"><polyline points="20 6 9 17 4 12"/></svg>`;
+function goto(n) {
+  [1,2,3].forEach(i=>{
+    document.getElementById('p'+i).classList.remove('active');
+    const st=document.getElementById('s'+i);
+    st.classList.remove('active','done');
+    if(i<n){ st.classList.add('done'); st.querySelector('.step-n').innerHTML=checkSVG; }
+    else st.querySelector('.step-n').textContent=i;
+    if(i<3) document.getElementById('sl'+i).classList.toggle('done',i<n);
+    document.getElementById('nav-'+i).classList.toggle('active',i===n);
+  });
+  document.getElementById('p'+n).classList.add('active');
+  document.getElementById('s'+n).classList.add('active');
+  cur=n; if(n===3) updateSummary();
+}
+
+/* ── CATEGORY ───────────────────────────────── */
+function catSlug(c){ return c==='Ciencias Básicas'?'cb':c==='Humanidades'?'hum':'sw'; }
+function catBadge(s){ return s==='cb'?'badge-purple':s==='hum'?'badge-green':'badge-amber'; }
+function setCat(btn,cat){
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel'); selCat=cat; document.getElementById('m-cat').value=cat;
+}
+
+/* ── SECTION 1 ──────────────────────────────── */
+function addMateria(){
+  const nombre=document.getElementById('m-nombre').value.trim();
+  const codigo=document.getElementById('m-codigo').value.trim();
+  const grupos=parseInt(document.getElementById('m-grupos').value);
+  const horas=parseInt(document.getElementById('m-horas').value);
+  if(!nombre){toast('Ingresa el nombre de la materia.');return;}
+  if(!codigo){toast('Ingresa el código de la materia.');return;}
+  if(!grupos||grupos<1){toast('Ingresa un número de grupos válido (≥1).');return;}
+  if(!horas||horas<1){toast('Ingresa una intensidad horaria válida (≥1).');return;}
+  if(!selCat){toast('Selecciona una categoría.');return;}
+  if(mats.find(m=>m.codigo===codigo)){toast('Ya existe una materia con ese código.');return;}
+  mats.push({id:++mSeq,nombre,codigo,grupos,horas,cat:selCat,slug:catSlug(selCat)});
+  renderTM(); syncSels();
+  document.getElementById('b-mat').textContent=mats.length;
+  ['m-nombre','m-codigo','m-grupos','m-horas'].forEach(id=>document.getElementById(id).value='');
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('sel'));
+  selCat=''; document.getElementById('m-cat').value='';
+  document.getElementById('m-nombre').focus();
+}
+
+function delMat(id){
+  mats=mats.filter(m=>m.id!==id);
+  profs.forEach(p=>{p.asigs=p.asigs.filter(x=>x!==id);renderChips(p);});
+  renderTM(); syncSels();
+  document.getElementById('b-mat').textContent=mats.length;
+  updateSummary();
+}
+
+function renderTM(){
+  const tb=document.getElementById('tb-mat'); tb.innerHTML='';
+  if(!mats.length){
+    tb.innerHTML='<tr><td colspan="7"><div class="empty-state"><div class="ei">📚</div><div>No hay materias registradas.</div></div></td></tr>';
+    return;
+  }
+  mats.forEach((m,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="color:var(--t3);font-family:var(--mono);font-size:.73rem;">${String(i+1).padStart(2,'0')}</td>
+      <td class="td-main">${esc(m.nombre)}</td>
+      <td class="td-mono">${esc(m.codigo)}</td>
+      <td><span class="badge badge-cyan">${m.grupos}</span></td>
+      <td><span class="badge badge-cyan">${m.horas}h</span></td>
+      <td><span class="badge ${catBadge(m.slug)}">${m.cat}</span></td>
+      <td style="text-align:right;">
+        <button class="btn btn-danger btn-sm" onclick="delMat(${m.id})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4h8v2"/></svg>
+          Eliminar
+        </button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+/* ── SECTION 2 ──────────────────────────────── */
+function genProfs(){
+  const n=parseInt(document.getElementById('n-prof').value);
+  if(!n||n<1){toast('Ingresa un número válido.');return;}
+  if(n>50){toast('Máximo 50 profesores.');return;}
+  const from=profs.length;
+  for(let i=0;i<n;i++) profs.push({id:++pSeq,nombre:'',codigo:'',asigs:[]});
+  renderPC(from);
+  document.getElementById('b-prof').textContent=profs.length;
+  document.getElementById('n-prof').value='';
+}
+
+function clearProfs(){
+  profs=[];pSeq=0;
+  document.getElementById('pg').innerHTML='';
+  document.getElementById('b-prof').textContent=0;
+  updateSummary();
+}
+
+function renderPC(from=0){
+  const g=document.getElementById('pg');
+  for(let i=from;i<profs.length;i++){
+    const p=profs[i];
+    const c=document.createElement('div');
+    c.className='prof-card'; c.id='pc-'+p.id;
+    c.innerHTML=`
+      <div class="prof-head">
+        <div class="prof-av" id="av-${p.id}">P${p.id}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="prof-name-d" id="dn-${p.id}">Profesor #${p.id}</div>
+          <div class="prof-code-d" id="dc-${p.id}">Sin código</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="delProf(${p.id})" style="align-self:flex-start;padding:4px 8px;">✕</button>
+      </div>
+      <div class="prof-fields">
+        <div class="fl">
+          <label class="lbl">Nombre completo</label>
+          <input class="inp" type="text" placeholder="Nombre Apellido" oninput="updN(${p.id},this.value)" />
+        </div>
+        <div class="fl">
+          <label class="lbl">Código / ID</label>
+          <input class="inp" type="text" placeholder="DOC-001" oninput="updC(${p.id},this.value)" />
+        </div>
+      </div>
+      <div class="fl" style="margin-bottom:10px;">
+        <label class="lbl">Asignar materia</label>
+        <div class="assign-row">
+          <select id="sel-${p.id}" class="inp"></select>
+          <button class="btn btn-ghost btn-sm" onclick="assignMat(${p.id})">Asignar</button>
+        </div>
+      </div>
+      <div class="fl">
+        <label class="lbl">Materias asignadas</label>
+        <div class="chips-wrap" id="ch-${p.id}"><span class="chips-empty">Sin asignaciones</span></div>
+      </div>`;
+    g.appendChild(c);
+    syncSelP(p.id);
+  }
+}
+
+function delProf(pid){
+  profs=profs.filter(p=>p.id!==pid);
+  const el=document.getElementById('pc-'+pid);
+  if(el){el.style.opacity='0';el.style.transform='scale(.95)';el.style.transition='.15s';setTimeout(()=>el.remove(),160);}
+  document.getElementById('b-prof').textContent=profs.length;
+  updateSummary();
+}
+function updN(pid,v){
+  const p=profs.find(p=>p.id===pid);if(!p)return;
+  p.nombre=v;
+  const d=document.getElementById('dn-'+pid);if(d)d.textContent=v||('Profesor #'+pid);
+  const av=document.getElementById('av-'+pid);
+  if(av&&v){const pts=v.trim().split(' ');av.textContent=(pts[0][0]+(pts[1]?pts[1][0]:'')).toUpperCase();}
+}
+function updC(pid,v){
+  const p=profs.find(p=>p.id===pid);if(!p)return;
+  p.codigo=v;
+  const d=document.getElementById('dc-'+pid);if(d)d.textContent=v||'Sin código';
+}
+function syncSels(){ profs.forEach(p=>syncSelP(p.id)); }
+function syncSelP(pid){
+  const sel=document.getElementById('sel-'+pid);if(!sel)return;
+  sel.innerHTML='<option value="">— Seleccionar materia —</option>';
+  const p=profs.find(p=>p.id===pid);
+  mats.forEach(m=>{
+    if(p&&p.asigs.includes(m.id))return;
+    const o=document.createElement('option');
+    o.value=m.id;
+    o.textContent=`${m.nombre} (${m.codigo}) · ${m.grupos}g · ${m.horas}h · ${m.cat}`;
+    sel.appendChild(o);
+  });
+}
+function assignMat(pid){
+  const sel=document.getElementById('sel-'+pid);
+  const mid=parseInt(sel.value);
+  if(!mid){toast('Selecciona una materia.');return;}
+  const p=profs.find(p=>p.id===pid);
+  if(!p||p.asigs.includes(mid))return;
+  p.asigs.push(mid);sel.value='';
+  renderChips(p);syncSelP(pid);updateSummary();
+}
+function removeAsig(pid,mid){
+  const p=profs.find(p=>p.id===pid);if(!p)return;
+  p.asigs=p.asigs.filter(x=>x!==mid);
+  renderChips(p);syncSelP(pid);updateSummary();
+}
+function renderChips(p){
+  const a=document.getElementById('ch-'+p.id);if(!a)return;
+  a.innerHTML='';
+  if(!p.asigs.length){a.innerHTML='<span class="chips-empty">Sin asignaciones</span>';return;}
+  p.asigs.forEach(mid=>{
+    const m=mats.find(m=>m.id===mid);if(!m)return;
+    const ch=document.createElement('span');
+    ch.className=`chip ${m.slug}`;
+    ch.innerHTML=`${esc(m.nombre)} <span style="opacity:.55;font-size:.68rem">${m.grupos}g·${m.horas}h</span> <span class="chip-x" onclick="removeAsig(${p.id},${m.id})">✕</span>`;
+    a.appendChild(ch);
+  });
+}
+
+/* ── SECTION 3 ──────────────────────────────── */
+function updateSummary(){
+  const ta=profs.reduce((a,p)=>a+p.asigs.length,0);
+  document.getElementById('sm-mat').textContent=mats.length;
+  document.getElementById('sm-prof').textContent=profs.length;
+  document.getElementById('sm-asig').textContent=ta;
+  document.getElementById('b-par').textContent=ta||'—';
+}
+function run(){
+  const t=parseInt(document.getElementById('t-ms').value);
+  if(!mats.length){toast('Registra al menos una materia.');return;}
+  if(!profs.length){toast('Configura al menos un profesor.');return;}
+  if(!t||t<1){toast('Ingresa un tiempo de ejecución válido.');return;}
+  document.getElementById('p-mat').value=JSON.stringify(mats.map(m=>({id:m.id,nombre:m.nombre,codigo:m.codigo,grupos:m.grupos,horas:m.horas,categoria:m.cat})));
+  document.getElementById('p-prof').value=JSON.stringify(profs.map(p=>({id:p.id,nombre:p.nombre,codigo:p.codigo,materias:p.asigs})));
+  document.getElementById('p-t').value=t;
+  document.getElementById('hidden-form').submit();
+}
+
+/* ── HELPERS ────────────────────────────────── */
+let tTimer;
+function toast(msg){
+  clearTimeout(tTimer);
+  document.getElementById('t-msg').textContent=msg;
+  document.getElementById('toast').classList.add('on');
+  tTimer=setTimeout(()=>document.getElementById('toast').classList.remove('on'),3500);
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+/* ── KEYBOARD ───────────────────────────────── */
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter'||cur!==1)return;
+  const id=document.activeElement?.id;
+  if(id==='m-nombre') document.getElementById('m-codigo').focus();
+  else if(id==='m-codigo') document.getElementById('m-grupos').focus();
+  else if(id==='m-grupos') document.getElementById('m-horas').focus();
+  else if(id==='m-horas')  addMateria();
+});
+</script>
+</body>
+</html>
