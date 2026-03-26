@@ -3,3 +3,4 @@ pandas
 openpyxl
 streamlit
 django>=5.0,<6
+pymysql

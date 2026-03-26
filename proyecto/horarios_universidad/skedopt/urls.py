@@ -9,4 +9,5 @@ urlpatterns = [
     path("optimizar/", views.optimize, name="optimize"),
     path("descargar/", views.download_last, name="download"),
     path("horario/", views.horario_clases, name="horario"),
+    path("resultado/", views.resultado, name="resultado"),
 ]
