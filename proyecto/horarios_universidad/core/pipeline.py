@@ -4,8 +4,9 @@ from core.solver_runner import solve
 from core.extractor import extract
 from core.excel_exporter import export_excel
 
-def run_pipeline(cfg):
-    data = build_data(cfg)
+def run_pipeline(cfg, data=None, output_dir=None):
+    if data is None:
+        data = build_data(cfg)
     sol = solve(cfg, data)
 
     status_txt = {
@@ -25,7 +26,7 @@ def run_pipeline(cfg):
         }
 
     df_asig, df_cal, df_uso = extract(sol, cfg)
-    excel_path = export_excel(df_asig, df_cal, df_uso, sol, data)
+    excel_path = export_excel(df_asig, df_cal, df_uso, sol, data, output_dir=output_dir)
 
     return {
         "status": status_txt,

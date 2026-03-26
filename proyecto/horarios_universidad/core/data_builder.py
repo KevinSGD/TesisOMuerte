@@ -139,3 +139,129 @@ def build_data(cfg):
         "capacidad_salon": capacidad_salon,# <-- clave que usa model_builder
         "num_salones": num_salones,        # <-- clave que usa model_builder
     }
+
+
+def _horas_a_creditos(horas) -> int:
+    try:
+        h = int(horas)
+    except (TypeError, ValueError):
+        h = 2
+    if h < 1:
+        return 1
+    if h > 4:
+        return 4
+    return h
+
+
+def _categoria_a_area_y_tipo(categoria: str):
+    c = (categoria or "").strip()
+    if c == "Software":
+        return "Desarrollo de Software", "presencial_pc"
+    if c == "Humanidades":
+        return "Humanidades", "presencial_comun"
+    if c == "Ciencias Básicas":
+        return "Ciencias Básicas", "presencial_comun"
+    return "Desarrollo de Software", "presencial_pc"
+
+
+def _id_materia(v):
+    """Normaliza id de materia (el formulario a veces manda string en JSON)."""
+    if v is None:
+        raise ValueError("Cada materia debe tener un id.")
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        raise ValueError(f"Id de materia inválido: {v!r}.") from None
+
+
+def build_data_from_ui(cfg, materias_list, profes_list):
+    """
+    Construye `data` compatible con build_model a partir del JSON de la interfaz web.
+
+    materias_list: [{id, nombre, codigo, grupos, horas, categoria}, ...]
+    profes_list:   [{id, nombre, codigo, materias: [id_materia, ...]}, ...]
+    """
+    if not materias_list:
+        raise ValueError("Debe haber al menos una materia.")
+    if not profes_list:
+        raise ValueError("Debe haber al menos un profesor.")
+
+    num_cursos = len(materias_list)
+    asignaturas = []
+    materias = []
+    creditos = []
+    areas = []
+    tipo_materia = {}
+    Gc_override = [0] * num_cursos
+    id_a_curso = {}
+
+    for c, m in enumerate(materias_list):
+        mid = _id_materia(m.get("id"))
+        id_a_curso[mid] = c
+        nombre = (m.get("nombre") or "").strip() or f"Materia_{c + 1}"
+        try:
+            grupos = int(m.get("grupos") or 1)
+        except (TypeError, ValueError):
+            grupos = 1
+        if grupos < 1:
+            grupos = 1
+        cr = _horas_a_creditos(m.get("horas"))
+        area, tm = _categoria_a_area_y_tipo(m.get("categoria"))
+        asignaturas.append((nombre, cr, area))
+        materias.append(nombre)
+        creditos.append(cr)
+        areas.append(area)
+        tipo_materia[c] = tm
+        Gc_override[c] = grupos
+
+    cursos_activos = list(range(num_cursos))
+
+    profesores = []
+    for i, p in enumerate(profes_list):
+        nom = (p.get("nombre") or "").strip()
+        cod = (p.get("codigo") or "").strip()
+        profesores.append(nom or cod or f"Profesor_{i + 1:02d}")
+
+    candidatos_override = {}
+    for c in cursos_activos:
+        elegibles = set()
+        for pidx, prof in enumerate(profes_list):
+            for mid in prof.get("materias") or []:
+                try:
+                    mk = int(mid)
+                except (TypeError, ValueError):
+                    continue
+                if id_a_curso.get(mk) == c:
+                    elegibles.add(pidx)
+                    break
+        if not elegibles:
+            raise ValueError(f"La materia «{materias[c]}» no tiene profesores asignados.")
+        candidatos_override[c] = elegibles
+
+    num_salones = cfg["num_salones_comunes"] + cfg["num_salones_pc"]
+    salones = [f"Salon_{i + 1:02d}" for i in range(num_salones)]
+    tipo_salon = {}
+    capacidad_salon = {}
+    for s in range(num_salones):
+        if s < cfg["num_salones_comunes"]:
+            tipo_salon[s] = "comun"
+        else:
+            tipo_salon[s] = "pc"
+        capacidad_salon[s] = 25
+
+    return {
+        "asignaturas": asignaturas,
+        "materias": materias,
+        "creditos": creditos,
+        "areas": areas,
+        "num_cursos": num_cursos,
+        "tipo_materia": tipo_materia,
+        "cursos_activos": cursos_activos,
+        "profesores": profesores,
+        "salones": salones,
+        "tipo_salon": tipo_salon,
+        "capacidad_salon": capacidad_salon,
+        "num_salones": num_salones,
+        "Gc_override": Gc_override,
+        "candidatos_override": candidatos_override,
+    }

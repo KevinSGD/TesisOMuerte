@@ -338,9 +338,32 @@
       .sum-row { grid-template-columns: 1fr; }
       .step-label { display: none; }
     }
+
+    .dj-msgs {
+      position: fixed; top: calc(var(--th) + 8px); left: var(--sw); right: 0; z-index: 120;
+      padding: 0 24px; display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+    }
+    .dj-msgs .dj-msg { pointer-events: auto; padding: 10px 14px; border-radius: var(--r); font-size: .82rem; border: 1px solid var(--border); background: var(--surface2); color: var(--t1); }
+    .dj-msg-success { background: var(--green-bg) !important; color: var(--green) !important; border-color: rgba(52,211,153,.35) !important; }
+    .dj-msg-error { background: var(--red-bg) !important; color: var(--red) !important; border-color: rgba(248,113,113,.35) !important; }
+    .dj-msg-warning { background: var(--amber-bg) !important; color: var(--amber) !important; }
+    .dj-dl { margin-left: var(--sw); padding: 12px 28px 0; }
   </style>
 </head>
 <body>
+{% if messages %}
+<div class="dj-msgs">{% for message in messages %}<div class="dj-msg dj-msg-{{ message.tags }}">{{ message }}</div>{% endfor %}</div>
+{% endif %}
+{% if last_excel_basename or tiene_horario_tabla %}
+<div class="dj-dl">
+  {% if tiene_horario_tabla %}
+  <a class="btn btn-ghost btn-sm" href="{% url 'skedopt:horario' %}" style="margin-right:10px;">Ver horario de clases</a>
+  {% endif %}
+  {% if last_excel_basename %}
+  <a class="btn btn-primary btn-sm" href="{% url 'skedopt:download' %}">Descargar último Excel ({{ last_excel_basename }})</a>
+  {% endif %}
+</div>
+{% endif %}
 
 <!-- ── SIDEBAR ───────────────────────────────────────── -->
 <aside class="sidebar">

@@ -50,53 +50,76 @@ def build_model(cfg, data):
 
     # =========================
     # N2: Grupos por asignatura
-    # - 10 disciplinares aleatorias con 3 grupos
-    # - resto con 1 o 2 grupos
+    # - Modo UI: grupos definidos en data["Gc_override"]
+    # - Modo automático: 10 disciplinares aleatorias con 3 grupos; resto con 1 o 2
     # =========================
-    AREAS_DISCIPLINARES = {
-        "desarrollo de software",
-        "ciencia de datos",
-        "infraestructura ti",
-        "disciplinar",
-        "disciplinares",
-    }
+    G = []
+    Gc = [0] * NUM_CURSOS
+    cursos_con_3 = set()
 
-    disciplinares = [c for c in cursos_activos if nrm(areas[c]) in AREAS_DISCIPLINARES]
-    n_3 = min(10, len(disciplinares))
-    cursos_con_3 = set(random.sample(disciplinares, n_3)) if n_3 > 0 else set()
+    if data.get("Gc_override") is not None:
+        gcv = data["Gc_override"]
+        for c in cursos_activos:
+            gnum = int(gcv[c])
+            if gnum < 1:
+                raise ValueError(f"Curso {c}: número de grupos debe ser ≥ 1.")
+            Gc[c] = gnum
+            if gnum >= 3:
+                cursos_con_3.add(c)
+            for gi in range(gnum):
+                G.append((c, gi))
+    else:
+        AREAS_DISCIPLINARES = {
+            "desarrollo de software",
+            "ciencia de datos",
+            "infraestructura ti",
+            "disciplinar",
+            "disciplinares",
+        }
 
-    G = []                 # (curso, grupo_idx)
-    Gc = [0] * NUM_CURSOS  # número de grupos por curso
+        disciplinares = [c for c in cursos_activos if nrm(areas[c]) in AREAS_DISCIPLINARES]
+        n_3 = min(10, len(disciplinares))
+        cursos_con_3 = set(random.sample(disciplinares, n_3)) if n_3 > 0 else set()
 
-    for c in cursos_activos:
-        if c in cursos_con_3:
-            gnum = 3
-        else:
-            gnum = random.choice([1, 2])  # todos tienen grupos
-        Gc[c] = gnum
-        for gi in range(gnum):
-            G.append((c, gi))
+        for c in cursos_activos:
+            if c in cursos_con_3:
+                gnum = 3
+            else:
+                gnum = random.choice([1, 2])
+            Gc[c] = gnum
+            for gi in range(gnum):
+                G.append((c, gi))
 
     NUM_GRUPOS = len(G)
 
     # =========================
     # Elegibilidad profesor-curso
+    # - Modo UI: data["candidatos_override"][c] = set de índices de profesor
+    # - Modo automático: subconjunto aleatorio K por curso
     # =========================
-    K = cfg["k_candidatos"]
     candidatos_por_curso = {}
 
-    for c in cursos_activos:
-        candidatos_por_curso[c] = set(random.sample(range(NUM_PROFES), min(K, NUM_PROFES)))
+    if data.get("candidatos_override") is not None:
+        ovr = data["candidatos_override"]
+        for c in cursos_activos:
+            raw = ovr.get(c, set())
+            s = set(raw) if not isinstance(raw, set) else set(raw)
+            if not s:
+                raise ValueError(f"Curso {c} sin profesores elegibles.")
+            candidatos_por_curso[c] = s
+    else:
+        K = cfg["k_candidatos"]
+        for c in cursos_activos:
+            candidatos_por_curso[c] = set(random.sample(range(NUM_PROFES), min(K, NUM_PROFES)))
 
-    # asegurar que todos los profes aparezcan al menos una vez
-    aparece = {p: 0 for p in range(NUM_PROFES)}
-    for c in cursos_activos:
-        for p in candidatos_por_curso[c]:
-            aparece[p] += 1
-    faltantes = [p for p, cnt in aparece.items() if cnt == 0]
-    for p in faltantes:
-        c = random.choice(cursos_activos)
-        candidatos_por_curso[c].add(p)
+        aparece = {p: 0 for p in range(NUM_PROFES)}
+        for c in cursos_activos:
+            for p in candidatos_por_curso[c]:
+                aparece[p] += 1
+        faltantes = [p for p, cnt in aparece.items() if cnt == 0]
+        for p in faltantes:
+            c = random.choice(cursos_activos)
+            candidatos_por_curso[c].add(p)
 
     # =========================
     # Restricción INFRA

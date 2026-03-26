@@ -5,9 +5,10 @@ from openpyxl import load_workbook
 from openpyxl.styles import Alignment
 
 
-def export_excel(df_asig, df_cal, df_uso, solution, data):
-    os.makedirs("outputs", exist_ok=True)
-    out = os.path.join("outputs", f"horario_profesores_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.xlsx")
+def export_excel(df_asig, df_cal, df_uso, solution, data, output_dir=None):
+    base = output_dir or "outputs"
+    os.makedirs(base, exist_ok=True)
+    out = os.path.join(base, f"horario_profesores_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.xlsx")
 
     meta = solution["meta"]
 
