@@ -1,31 +1,8 @@
-import os
-import warnings
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-try:
-    from dotenv import load_dotenv
-
-    _loaded = False
-    for _env in (
-        BASE_DIR / ".env",
-        Path.cwd() / ".env",
-        BASE_DIR.parent / ".env",
-    ):
-        if _env.is_file():
-            load_dotenv(_env, encoding="utf-8-sig")
-            _loaded = True
-            break
-    if not _loaded:
-        load_dotenv(encoding="utf-8-sig")
-except ImportError:
-    pass
-
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-dev-cambiar-en-produccion",
-)
+SECRET_KEY = "django-insecure-dev-cambiar-en-produccion"
 
 DEBUG = True
 
@@ -70,52 +47,21 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "horarios_site.wsgi.application"
 
-# Base de datos: con variables de entorno todos usan la misma BD online sin tocar código.
-# Copiá .env.example → .env y completá valores (Supabase: Settings → Database).
-# Si no hay DB_HOST, se usa SQLite local solo para pruebas rápidas (datos distintos al equipo).
-_db_host = (os.environ.get("DB_HOST") or "").strip()
-_env_path = BASE_DIR / ".env"
-if _env_path.is_file() and not _db_host:
-    warnings.warn(
-        f"Existe el archivo {_env_path} pero DB_HOST está vacío o no se leyó. "
-        "Revisá que la línea sea exactamente: DB_HOST=db.xxxxx.supabase.co (sin espacios alrededor del =).",
-        UserWarning,
-        stacklevel=1,
-    )
-if _db_host and not (os.environ.get("DB_PASSWORD") or "").strip():
-    warnings.warn(
-        "DB_HOST está definido pero DB_PASSWORD está vacío: la conexión a Supabase va a fallar.",
-        UserWarning,
-        stacklevel=1,
-    )
-if _db_host:
-    DATABASES = {
-        "default": {
-            "ENGINE": os.environ.get(
-                "DB_ENGINE", "django.db.backends.postgresql"
-            ),
-            "NAME": os.environ.get("DB_NAME", "postgres"),
-            "USER": os.environ.get("DB_USER", "postgres"),
-            "PASSWORD": os.environ.get("DB_PASSWORD", ""),
-            "HOST": _db_host,
-            "PORT": os.environ.get("DB_PORT", "5432"),
-            "OPTIONS": {"sslmode": os.environ.get("DB_SSLMODE", "require")},
-        }
+# Supabase Postgres: HOST = solo el hostname (copiar de Dashboard → Settings → Database).
+# Nunca pongas :puerto ni /nombre_bd en HOST; eso va en PORT y NAME.
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "postgres",
+        "USER": "postgres",
+        "PASSWORD": "mri8AZWGFtOyjOtC",
+        "HOST": "db.oxaqiqqkzxktwnbyfavv.supabase.co",
+        "PORT": "5432",
+        "OPTIONS": {
+            "sslmode": "require",
+        },
     }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
-    warnings.warn(
-        "Base de datos: SQLite local (no hay DB_HOST en .env). "
-        "Eso NO es Supabase: cada PC tiene su propio archivo y el equipo no ve esos datos. "
-        "Para compartir la misma base, creá .env con DB_HOST, DB_USER y DB_PASSWORD del proyecto Supabase.",
-        UserWarning,
-        stacklevel=1,
-    )
+}
 
 AUTH_PASSWORD_VALIDATORS = []
 
