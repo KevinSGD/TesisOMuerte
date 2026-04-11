@@ -6,8 +6,9 @@ from django.contrib import messages
 from django.http import FileResponse, Http404
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_POST
-from django.db import connection
 
+from core.data_builder import nombre_area_desde_categoria_ui
+from skedopt.models import Area, Materia, Profesor
 from skedopt.schedule_grid import construir_tabla_horario
 
 
@@ -85,77 +86,29 @@ def optimize(request):
         return redirect("skedopt:index")
 
     # =========================================
-    # 🔥 GUARDAR EN MYSQL
+    # Guardar materias/profesores en BD (misma lógica de área que la UI / optimizador)
     # =========================================
     try:
-        with connection.cursor() as cursor:
+        for prof in profes_list:
+            nombre = (prof.get("nombre") or "").strip()
+            if not nombre:
+                continue
+            if Profesor.objects.filter(nombre_completo=nombre).exists():
+                continue
+            Profesor.objects.create(nombre_completo=nombre, activo=1)
 
-            # ✔ área por defecto
-            cursor.execute("SELECT id FROM areas WHERE id = 1")
-            if not cursor.fetchone():
-                cursor.execute(
-                    "INSERT INTO areas (id, nombre) VALUES (1, 'General')"
-                )
-
-            # ✔ profesores
-            for prof in profes_list:
-                nombre = prof.get("nombre")
-
-                if not nombre:
-                    continue
-
-                cursor.execute(
-                    "SELECT id FROM profesores WHERE nombre_completo = %s",
-                    [nombre]
-                )
-                if cursor.fetchone():
-                    continue
-
-                cursor.execute(
-                    """
-                    INSERT INTO profesores (nombre_completo, activo)
-                    VALUES (%s, %s)
-                    """,
-                    [nombre, 1]
-                )
-
-            # ✔ materias
-            for mat in materias_list:
-                nombre = mat.get("nombre")
-
-                if not nombre:
-                    continue
-
-                # código único
-                codigo = mat.get("codigo")
-                if not codigo:
-                    codigo = f"MAT_{abs(hash(nombre)) % 10000}"
-
-                # área
-                area_id = mat.get("area_id", 1)
-
-                cursor.execute(
-                    "SELECT id FROM areas WHERE id = %s",
-                    [area_id]
-                )
-                if not cursor.fetchone():
-                    area_id = 1
-
-                # evitar duplicados
-                cursor.execute(
-                    "SELECT id FROM materias WHERE codigo = %s",
-                    [codigo]
-                )
-                if cursor.fetchone():
-                    continue
-
-                cursor.execute(
-                    """
-                    INSERT INTO materias (codigo, nombre, area_id)
-                    VALUES (%s, %s, %s)
-                    """,
-                    [codigo, nombre, area_id]
-                )
+        for mat in materias_list:
+            nombre = (mat.get("nombre") or "").strip()
+            if not nombre:
+                continue
+            codigo = mat.get("codigo")
+            if not codigo:
+                codigo = f"MAT_{abs(hash(nombre)) % 10000}"
+            area_nombre = nombre_area_desde_categoria_ui(mat.get("categoria"))
+            area_obj, _ = Area.objects.get_or_create(nombre=area_nombre)
+            if Materia.objects.filter(codigo=codigo).exists():
+                continue
+            Materia.objects.create(codigo=codigo, nombre=nombre, area=area_obj)
 
     except Exception as e:
         messages.error(request, f"Error guardando en BD: {e}")

@@ -1,4 +1,5 @@
 import random
+from typing import Optional
 
 def norm(txt: str) -> str:
     return (
@@ -162,6 +163,15 @@ def _categoria_a_area_y_tipo(categoria: str):
     if c == "Ciencias Básicas":
         return "Ciencias Básicas", "presencial_comun"
     return "Desarrollo de Software", "presencial_pc"
+
+
+def nombre_area_desde_categoria_ui(categoria: Optional[str]) -> str:
+    """
+    Mismo criterio que el optimizador: botones Software / Humanidades / Ciencias Básicas
+    → nombres de área guardables en BD (p. ej. Software → «Desarrollo de Software»).
+    """
+    area, _ = _categoria_a_area_y_tipo(categoria)
+    return area
 
 
 def _id_materia(v):

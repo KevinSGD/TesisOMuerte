@@ -47,14 +47,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "horarios_site.wsgi.application"
 
+# Supabase Postgres: HOST = solo el hostname (copiar de Dashboard → Settings → Database).
+# Nunca pongas :puerto ni /nombre_bd en HOST; eso va en PORT y NAME.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'proyecto_tesis',
-        'USER': 'root',
-        'PASSWORD': '',
-        'HOST': '127.0.0.1',
-        'PORT': '3306',
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "postgres",
+        "USER": "postgres",
+        "PASSWORD": "mri8AZWGFtOyjOtC",
+        "HOST": "db.oxaqiqqkzxktwnbyfavv.supabase.co",
+        "PORT": "5432",
+        "OPTIONS": {
+            "sslmode": "require",
+        },
     }
 }
 
