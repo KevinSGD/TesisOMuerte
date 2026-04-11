@@ -1,4 +1,5 @@
 import os
+import warnings
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -83,6 +84,13 @@ else:
             "NAME": BASE_DIR / "db.sqlite3",
         }
     }
+    warnings.warn(
+        "Base de datos: SQLite local (no hay DB_HOST en .env). "
+        "Eso NO es Supabase: cada PC tiene su propio archivo y el equipo no ve esos datos. "
+        "Para compartir la misma base, creá .env con DB_HOST, DB_USER y DB_PASSWORD del proyecto Supabase.",
+        UserWarning,
+        stacklevel=1,
+    )
 
 AUTH_PASSWORD_VALIDATORS = []
 
