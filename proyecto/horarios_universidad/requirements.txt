@@ -2,5 +2,7 @@ ortools==9.15.6755
 pandas
 openpyxl
 streamlit
-django>=5.0,<6
+django>=4.2,<6
 pymysql
+psycopg2-binary
+python-dotenv

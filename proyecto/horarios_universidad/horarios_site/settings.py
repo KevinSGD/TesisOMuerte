@@ -1,8 +1,19 @@
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = "django-insecure-dev-cambiar-en-produccion"
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(BASE_DIR / ".env")
+except ImportError:
+    pass
+
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-dev-cambiar-en-produccion",
+)
 
 DEBUG = True
 
@@ -47,21 +58,31 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "horarios_site.wsgi.application"
 
-# Supabase Postgres: HOST = solo el hostname (copiar de Dashboard → Settings → Database).
-# Nunca pongas :puerto ni /nombre_bd en HOST; eso va en PORT y NAME.
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "postgres",
-        "USER": "postgres",
-        "PASSWORD": "mri8AZWGFtOyjOtC",
-        "HOST": "db.oxaqiqqkzxktwnbyfavv.supabase.co",
-        "PORT": "5432",
-        "OPTIONS": {
-            "sslmode": "require",
-        },
+# Base de datos: con variables de entorno todos usan la misma BD online sin tocar código.
+# Copiá .env.example → .env y completá valores (Supabase: Settings → Database).
+# Si no hay DB_HOST, se usa SQLite local solo para pruebas rápidas (datos distintos al equipo).
+_db_host = (os.environ.get("DB_HOST") or "").strip()
+if _db_host:
+    DATABASES = {
+        "default": {
+            "ENGINE": os.environ.get(
+                "DB_ENGINE", "django.db.backends.postgresql"
+            ),
+            "NAME": os.environ.get("DB_NAME", "postgres"),
+            "USER": os.environ.get("DB_USER", "postgres"),
+            "PASSWORD": os.environ.get("DB_PASSWORD", ""),
+            "HOST": _db_host,
+            "PORT": os.environ.get("DB_PORT", "5432"),
+            "OPTIONS": {"sslmode": os.environ.get("DB_SSLMODE", "require")},
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = []
 
