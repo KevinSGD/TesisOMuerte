@@ -7,7 +7,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 try:
     from dotenv import load_dotenv
 
-    load_dotenv(BASE_DIR / ".env")
+    _loaded = False
+    for _env in (
+        BASE_DIR / ".env",
+        Path.cwd() / ".env",
+        BASE_DIR.parent / ".env",
+    ):
+        if _env.is_file():
+            load_dotenv(_env, encoding="utf-8-sig")
+            _loaded = True
+            break
+    if not _loaded:
+        load_dotenv(encoding="utf-8-sig")
 except ImportError:
     pass
 
@@ -63,6 +74,20 @@ WSGI_APPLICATION = "horarios_site.wsgi.application"
 # Copiá .env.example → .env y completá valores (Supabase: Settings → Database).
 # Si no hay DB_HOST, se usa SQLite local solo para pruebas rápidas (datos distintos al equipo).
 _db_host = (os.environ.get("DB_HOST") or "").strip()
+_env_path = BASE_DIR / ".env"
+if _env_path.is_file() and not _db_host:
+    warnings.warn(
+        f"Existe el archivo {_env_path} pero DB_HOST está vacío o no se leyó. "
+        "Revisá que la línea sea exactamente: DB_HOST=db.xxxxx.supabase.co (sin espacios alrededor del =).",
+        UserWarning,
+        stacklevel=1,
+    )
+if _db_host and not (os.environ.get("DB_PASSWORD") or "").strip():
+    warnings.warn(
+        "DB_HOST está definido pero DB_PASSWORD está vacío: la conexión a Supabase va a fallar.",
+        UserWarning,
+        stacklevel=1,
+    )
 if _db_host:
     DATABASES = {
         "default": {
