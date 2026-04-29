@@ -110,7 +110,7 @@ def run(payload: RunRequest):
         }
         if df_asig is not None:
             response["df_asig_rows"] = int(len(df_asig))
-            response["df_asig_preview"] = df_asig.head(20).fillna("").to_dict(orient="records")
+            response["df_asig_preview"] = df_asig.fillna("").to_dict(orient="records")
 
         return response
     except ValueError as exc:

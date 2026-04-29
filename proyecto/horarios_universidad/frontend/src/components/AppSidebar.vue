@@ -7,8 +7,7 @@ const expanded = ref(true)
 
 const links = [
   { to: '/', label: 'Dashboard' },
-  { to: '/run', label: 'Generar Horario' },
-  { to: '/data', label: 'Datos UI' },
+  { to: '/scheduler', label: 'Generar Horario' },
 ]
 </script>
 
