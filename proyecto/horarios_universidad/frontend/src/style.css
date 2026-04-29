@@ -237,6 +237,15 @@ a {
   gap: 12px;
 }
 
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  opacity: 0.5;
+}
+
+select option {
+  background: #12122a;
+}
+
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: 1fr;
