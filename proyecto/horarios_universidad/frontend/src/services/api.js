@@ -1,14 +1,22 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE_URL}${path}`, options)
+  const url = `${API_BASE_URL}${path}`
+
+  let response
+  try {
+    response = await fetch(url, options)
+  } catch (error) {
+    throw new Error(`No se pudo conectar con la API en ${url}. Verifica que esté levantada y que VITE_API_BASE_URL apunte al endpoint correcto.`)
+  }
+
   const contentType = response.headers.get('content-type') || ''
   const isJson = contentType.includes('application/json')
-  const body = isJson ? await response.json() : await response.text()
+  const body = isJson ? await response.json().catch(() => ({})) : await response.text().catch(() => '')
 
   if (!response.ok) {
     const detail = typeof body === 'object' ? body?.detail : body
-    throw new Error(detail || `HTTP ${response.status}`)
+    throw new Error(detail || `HTTP ${response.status} al llamar ${path}`)
   }
 
   return body

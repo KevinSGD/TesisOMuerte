@@ -5,6 +5,8 @@ from typing import Any
 from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
+import requests
+import json
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -97,6 +99,31 @@ def run(payload: RunRequest):
     )
 
     try:
+        # If RAILWAY_RUN_URL is provided, forward the run request to that remote service
+        railway_run_url = (os.getenv("RAILWAY_RUN_URL") or "").strip()
+        if railway_run_url:
+            # Build JSON payload to send upstream. Keep fields minimal and serializable.
+            payload_json = {
+                "seed": payload.seed,
+                "num_profes": payload.num_profes,
+                "num_salones_comunes": payload.num_salones_comunes,
+                "num_salones_pc": payload.num_salones_pc,
+                "use_ui_data": payload.use_ui_data,
+                "materias": payload.materias,
+                "profesores": payload.profesores,
+            }
+            try:
+                resp = requests.post(railway_run_url, json=payload_json, timeout=60)
+                resp.raise_for_status()
+                # If the remote returns JSON, pass it through.
+                try:
+                    return resp.json()
+                except ValueError:
+                    return {"ok": True, "detail": "Delegated run completed, no JSON returned."}
+            except requests.RequestException as e:
+                raise HTTPException(status_code=502, detail=f"Error delegando a Railway: {e}") from e
+
+        # Fallback: run locally
         data = None
         if payload.use_ui_data:
             data = build_data_from_ui(cfg, payload.materias, payload.profesores)
@@ -115,5 +142,7 @@ def run(payload: RunRequest):
         return response
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error ejecutando pipeline: {exc}") from exc

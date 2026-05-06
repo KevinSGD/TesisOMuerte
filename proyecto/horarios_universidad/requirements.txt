@@ -7,3 +7,4 @@ python-dotenv
 sqlalchemy
 fastapi
 uvicorn[standard]
+requests
