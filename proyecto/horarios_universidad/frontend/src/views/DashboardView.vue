@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 import StatusCard from '../components/StatusCard.vue'
 import { getApiHealth, getDbHealth } from '../services/api'
 
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'No configurada'
+const apiBase = 'Proxy configurado (/api)'
 const apiStatus = ref({ state: 'unknown', value: 'Sin verificar' })
 const dbStatus = ref({ state: 'unknown', value: 'Sin verificar' })
 const loading = ref(false)

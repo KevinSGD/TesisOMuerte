@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const API_BASE_URL = '/api'
 
 async function request(path, options = {}) {
   const url = `${API_BASE_URL}${path}`
@@ -7,7 +7,7 @@ async function request(path, options = {}) {
   try {
     response = await fetch(url, options)
   } catch (error) {
-    throw new Error(`No se pudo conectar con la API en ${url}. Verifica que esté levantada y que VITE_API_BASE_URL apunte al endpoint correcto.`)
+    throw new Error(`No se pudo conectar con la API en ${url}. Verifica que esté levantada.`)
   }
 
   const contentType = response.headers.get('content-type') || ''
