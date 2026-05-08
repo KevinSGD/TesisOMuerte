@@ -7,7 +7,7 @@ from urllib.parse import quote_plus
 from dotenv import load_dotenv
 import requests
 import json
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
@@ -21,6 +21,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 load_dotenv(PROJECT_ROOT / ".env")
 
 app = FastAPI()
+
+# Router para endpoints bajo /api
+api_router = APIRouter(prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,12 +64,12 @@ DATABASE_URL = os.getenv("DATABASE_URL") or build_database_url()
 engine = create_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
 
 
-@app.get("/health")
+@api_router.get("/health")
 def health():
     return {"ok": True, "service": "scheduler-api"}
 
 
-@app.get("/db/health")
+@api_router.get("/db/health")
 def db_health():
     if not engine:
         return {"ok": False, "db": "not_configured"}
@@ -78,7 +81,7 @@ def db_health():
         return {"ok": False, "db": "down", "detail": str(e)}
 
 
-@app.get("/run")
+@api_router.get("/run")
 def run_help():
     return {
         "ok": False,
@@ -86,7 +89,7 @@ def run_help():
     }
 
 
-@app.post("/run")
+@api_router.post("/run")
 def run(payload: RunRequest):
     cfg = DEFAULT_CONFIG.copy()
     cfg.update(
@@ -146,3 +149,7 @@ def run(payload: RunRequest):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error ejecutando pipeline: {exc}") from exc
+
+
+# Registrar el router con el prefijo /api
+app.include_router(api_router)

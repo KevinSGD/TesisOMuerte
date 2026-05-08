@@ -1,76 +1,322 @@
 # TesisOMuerte
 
-Proyecto de horarios universitarios con API en FastAPI y frontend en Vue.
+Generador de horarios académicos con backend en FastAPI y frontend en Vue 3 + Vite.
 
-## Arranque rápido
+---
 
-Abre dos terminales PowerShell desde la raíz del repositorio: `C:\Users\kevin\Documents\TesisOMuerte`.
+## 📋 Requisitos Previos
 
-### 1. Instalar y preparar el entorno Python
+Antes de comenzar, asegúrate de tener instalado:
+
+- **Python 3.10+** (descargar desde https://www.python.org/)
+- **Node.js 18+** (descargar desde https://nodejs.org/)
+- **Git** (para clonar repositorios)
+- **PowerShell** (incluido en Windows)
+
+Verifica las versiones:
 
 ```powershell
+python --version
+node --version
+npm --version
+```
+
+---
+
+## 🚀 Guía de Instalación y Arranque
+
+Sigue estos pasos en orden desde la raíz del repositorio: `C:\Users\tu_usuario\Documents\TesisOMuerte`
+
+### Paso 1: Crear y Activar el Entorno Virtual Python
+
+Abre una terminal PowerShell **en la raíz del repositorio** y ejecuta:
+
+```powershell
+# Crear entorno virtual
 python -m venv .venv
-. .venv/Scripts/Activate.ps1
-python -m pip install -r proyecto/horarios_universidad/requirements.txt
+
+# Activar entorno virtual
+.\.venv\Scripts\Activate.ps1
+
+# Verificar que está activado (deberías ver (.venv) al inicio de la línea)
 ```
 
-### 2. Configurar variables de entorno de la API
-
-Si usas la base remota:
+**Si obtienes error de permisos**, ejecuta antes:
 
 ```powershell
-$env:DB_HOST = "db.oxaqiqqkzxktwnbyfavv.supabase.co"
-$env:DB_PORT = "5432"
-$env:DB_NAME = "postgres"
-$env:DB_USER = "postgres"
-$env:DB_PASSWORD = "<tu_password>"
-$env:DB_SSLMODE = "require"
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
 ```
 
-Si el motor del horario vive en Railway, define el endpoint que recibe el `POST /run`.
+### Paso 2: Instalar Dependencias del Proyecto
+
+Con el entorno virtual activado:
 
 ```powershell
-$env:RAILWAY_RUN_URL = "https://<tu-servicio>/run"
+# Actualizar pip
+python -m pip install -U pip
+
+# Instalar dependencias Python
+pip install -r proyecto/horarios_universidad/requirements.txt
+
+# Instalar el paquete del proyecto en modo editable
+pip install -e proyecto/horarios_universidad/
 ```
 
-Nota: `tesisomuerte.railway.internal` solo funciona dentro de Railway. Si arrancas la API en tu PC, necesitas una URL pública del servicio de Railway, no la interna.
-
-### 3. Levantar la API
-
-```powershell
-.\proyecto\horarios_universidad\start-api.ps1
-```
-
-Verificación rápida:
-
-```powershell
-c:/Users/kevin/Documents/TesisOMuerte/.venv/Scripts/python.exe -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8000/health').read().decode())"
-```
-
-### 4. Levantar el frontend
-
-En otro terminal:
+### Paso 3: Instalar Dependencias del Frontend
 
 ```powershell
 cd proyecto/horarios_universidad/frontend
+
 npm install
-npm run dev -- --host 127.0.0.1
+
+cd ../..
 ```
 
-Abrir en el navegador:
+### Paso 4: Configurar Variables de Entorno (Opcional)
 
-```text
-http://127.0.0.1:5173/
+Si necesitas conectarte a una base de datos remota, define estas variables:
+
+```powershell
+# Ejemplo con Supabase o PostgreSQL remoto
+$env:DB_HOST = "tu-servidor.supabase.co"
+$env:DB_PORT = "5432"
+$env:DB_NAME = "postgres"
+$env:DB_USER = "postgres"
+$env:DB_PASSWORD = "tu_contraseña"
+$env:DB_SSLMODE = "require"
 ```
 
-## Scripts útiles
+Si usas un servicio remoto de Railway:
 
-- `proyecto/horarios_universidad/start-api.ps1`: arranca la API.
-- `proyecto/horarios_universidad/start-front.ps1`: arranca el frontend.
-- `proyecto/horarios_universidad/README_START.md`: guía detallada paso a paso.
+```powershell
+$env:RAILWAY_RUN_URL = "https://tu-servicio-railway.com/run"
+```
 
-## Endpoints
+---
 
-- `GET /health`: verifica que la API esté viva.
-- `GET /db/health`: verifica conexión a base de datos.
-- `POST /run`: genera el horario. Si `RAILWAY_RUN_URL` existe, la API delega la ejecución al servicio remoto.
+## ▶️ Iniciar la Aplicación
+
+### Opción A: Dos Terminales (Recomendado)
+
+**Terminal 1 - Backend API:**
+
+```powershell
+# Desde la raíz del repositorio con el venv activado
+cd proyecto/horarios_universidad
+.\start-api.ps1
+```
+
+Deberías ver:
+```
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+```
+
+**Terminal 2 - Frontend:**
+
+```powershell
+# Desde la raíz del repositorio (puedes estar en otra terminal)
+cd proyecto/horarios_universidad
+.\start-front.ps1
+```
+
+Deberías ver:
+```
+➜  Local:   http://127.0.0.1:5173/
+```
+
+### Opción B: Una Terminal (Sequencial)
+
+```powershell
+# Backend primero
+cd proyecto/horarios_universidad
+.\start-api.ps1
+# Espera a que inicie, luego abre otra terminal y ejecuta:
+.\start-front.ps1
+```
+
+---
+
+## 🌐 Acceder a la Aplicación
+
+Una vez que ambos servidores estén corriendo:
+
+| Componente | URL | Descripción |
+|---|---|---|
+| **Frontend** | http://127.0.0.1:5173/ | Interfaz web de Vue |
+| **API** | http://127.0.0.1:8000 | Backend FastAPI |
+| **Swagger UI** | http://127.0.0.1:8000/docs | Documentación interactiva de API |
+| **ReDoc** | http://127.0.0.1:8000/redoc | Documentación alternativa |
+
+Abre tu navegador en: **http://127.0.0.1:5173/**
+
+---
+
+## ✅ Verificar que Todo Funciona
+
+### 1. Verificar Backend
+
+```powershell
+# Desde cualquier terminal
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/health"
+```
+
+Deberías recibir una respuesta con el estado.
+
+### 2. Verificar Conexión a BD
+
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/db/health"
+```
+
+### 3. Acceder a Swagger UI
+
+Abre en el navegador: http://127.0.0.1:8000/docs
+
+Aquí puedes probar todos los endpoints de la API.
+
+---
+
+## 🛑 Detener la Aplicación
+
+En cada terminal, presiona:
+
+```
+CTRL + C
+```
+
+Para salir del entorno virtual:
+
+```powershell
+deactivate
+```
+
+---
+
+## 🔧 Solución de Problemas
+
+### Error: "El archivo de script no se encontró"
+
+Si obtienes error al ejecutar `.\start-api.ps1`:
+
+```powershell
+# Soluciona permisos de ejecución
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+
+# Intenta nuevamente
+.\start-api.ps1
+```
+
+### Error: "No module named 'scheduler'"
+
+```powershell
+# Asegúrate de estar en el directorio correcto y que el venv esté activado
+cd proyecto/horarios_universidad
+pip install -e .
+```
+
+### Error: "npm: command not found"
+
+Node.js no está instalado. Descárgalo desde https://nodejs.org/
+
+### El frontend no se conecta a la API
+
+Verifica que:
+1. El backend esté corriendo en `http://127.0.0.1:8000`
+2. No haya conflicto de puertos (cambia los puertos si es necesario)
+3. Las URLs en `frontend/src/services/api.js` sean correctas
+
+### Cambios en el código no se reflejan
+
+Los servidores tienen hot reload. Si no funciona:
+
+```powershell
+# Detén los servidores con CTRL+C
+# Y reinicialos
+.\start-api.ps1
+.\start-front.ps1
+```
+
+---
+
+## 📁 Estructura del Proyecto
+
+```
+TesisOMuerte/
+├── proyecto/horarios_universidad/
+│   ├── src/scheduler/          # Backend Python
+│   │   ├── config/             # Configuración
+│   │   ├── application/        # Lógica de negocio
+│   │   ├── infrastructure/     # OR-Tools, exportadores
+│   │   └── interfaces/         # API y CLI
+│   ├── frontend/               # Frontend Vue 3
+│   │   ├── src/
+│   │   ├── package.json
+│   │   └── vite.config.js
+│   ├── requirements.txt        # Dependencias Python
+│   ├── pyproject.toml          # Configuración del paquete
+│   ├── start-api.ps1           # Script para iniciar backend
+│   └── start-front.ps1         # Script para iniciar frontend
+└── README.md                   # Este archivo
+```
+
+---
+
+## 📚 Scripts Disponibles
+
+| Script | Ubicación | Función |
+|---|---|---|
+| `start-api.ps1` | `proyecto/horarios_universidad/` | Inicia el backend FastAPI |
+| `start-front.ps1` | `proyecto/horarios_universidad/` | Inicia el frontend Vite |
+
+---
+
+## 🔗 Endpoints Principales de la API
+
+- `GET /health` - Verifica que la API esté viva
+- `GET /db/health` - Verifica conexión a base de datos
+- `POST /run` - Genera el horario (puede delegarse a Railway si está configurado)
+
+Ver todos los endpoints en: http://127.0.0.1:8000/docs
+
+---
+
+## 🎯 Resumen Rápido
+
+```powershell
+# 1. Ir a la raíz del proyecto
+cd C:\Users\tu_usuario\Documents\TesisOMuerte
+
+# 2. Crear y activar venv
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# 3. Instalar dependencias
+pip install -r proyecto/horarios_universidad/requirements.txt
+pip install -e proyecto/horarios_universidad/
+
+# 4. Instalar frontend
+cd proyecto/horarios_universidad/frontend
+npm install
+cd ../..
+
+# 5. Terminal 1 - Backend
+cd proyecto/horarios_universidad
+.\start-api.ps1
+
+# 6. Terminal 2 - Frontend
+cd proyecto/horarios_universidad
+.\start-front.ps1
+
+# 7. Abrir navegador
+# http://127.0.0.1:5173/
+```
+
+---
+
+## ❓ ¿Necesitas Ayuda?
+
+Si encuentras problemas:
+1. Verifica que todas las dependencias estén instaladas
+2. Asegúrate de que los puertos 8000 y 5173 no estén en uso
+3. Comprueba la conexión a internet si usas BD remota
+4. Revisa los logs en las terminales para más detalles

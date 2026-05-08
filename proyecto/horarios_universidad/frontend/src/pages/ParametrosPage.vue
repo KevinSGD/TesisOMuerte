@@ -1,9 +1,51 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { state } from '../store/state'
+import { state, resetCalendar, setEventos } from '../store/state'
 import { runScheduler } from '../services/api'
 
 const emit = defineEmits(['toast', 'prev', 'next'])
+
+// Mapeo de días a índices (0=Lunes, 4=Viernes)
+const DAY_MAP = {
+  'Lunes': 0,
+  'Martes': 1,
+  'Miércoles': 2,
+  'Jueves': 3,
+  'Viernes': 4,
+}
+
+// Convertir registro del backend a formato de evento del calendario
+function _parseScheduleEvents(records) {
+  if (!Array.isArray(records)) return []
+  
+  const eventos = []
+  const materiasMap = Object.fromEntries(state.materias.map(m => [m.nombre, m.id]))
+  const profesoresMap = Object.fromEntries(state.profesores.map(p => [p.nombre, p.id]))
+  
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i]
+    const dayIndex = DAY_MAP[r['Día']] ?? 0
+    const bloque = Number(r['Bloque']) || 0
+    const materiaId = materiasMap[r['Materia']] || null
+    const profesorId = profesoresMap[r['Profesor']] || null
+    const salon = r['Salón'] || ''
+    const grupo = Number(r['Curso']) || 1
+    
+    if (!materiaId || !profesorId) continue
+    
+    eventos.push({
+      id: `evt_${i}_${Date.now()}`,
+      materiaId,
+      profesorId,
+      salon,
+      grupo,
+      dayIndex,
+      hourIndex: bloque,
+    })
+  }
+  
+  return eventos
+}
 
 const loading = ref(false)
 
@@ -68,10 +110,16 @@ async function ejecutarAlgoritmo() {
   }
 
   const eventos = Array.isArray(out.df_asig_preview) ? _parseScheduleEvents(out.df_asig_preview) : []
-  if (!eventos.length) return emit('toast', 'No se pudo generar el calendario desde la respuesta del backend.')
+  if (!eventos.length) {
+    if (out.df_asig_preview) {
+      console.warn('No se pudieron mapear eventos. Datos recibidos:', out.df_asig_preview)
+    }
+    return emit('toast', 'No se pudo generar el calendario desde la respuesta del backend.')
+  }
 
   resetCalendar()
   setEventos(eventos)
+  emit('toast', `✓ Horario generado con ${eventos.length} clases`)
   emit('next')
 }
 </script>
