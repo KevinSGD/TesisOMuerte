@@ -56,7 +56,7 @@ Con el entorno virtual activado:
 python -m pip install -U pip
 
 # Instalar dependencias Python
-pip install -r proyecto/horarios_universidad/requirements.txt
+I
 
 # Instalar el paquete del proyecto en modo editable
 pip install -e proyecto/horarios_universidad/

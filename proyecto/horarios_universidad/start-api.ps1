@@ -4,11 +4,20 @@
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
-$venvActivate = Join-Path $scriptDir ".venv\Scripts\Activate.ps1"
-$pythonExe = "python"
-if (Test-Path $venvActivate) {
-    . $venvActivate
-    $pythonExe = Join-Path $scriptDir ".venv\Scripts\python.exe"
+$venvPython = Join-Path $scriptDir ".venv\Scripts\python.exe"
+$pythonExe = $null
+if (Test-Path $venvPython) {
+    $pythonExe = $venvPython
+} else {
+    $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
+    if ($pythonCmd) {
+        $pythonExe = "python"
+    } elseif (Get-Command py -ErrorAction SilentlyContinue) {
+        $pythonExe = "py"
+    } else {
+        Write-Error "No se encontro Python. Instala Python o activa un entorno virtual en .venv."
+        exit 1
+    }
 }
 
 # Opcional: configurar variables de entorno necesarias (ejemplo con Railway DB)
