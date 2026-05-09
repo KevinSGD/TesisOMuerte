@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { state, resetCalendar, setEventos } from '../store/state'
-import { runScheduler } from '../services/api'
+import { runScheduler, saveData } from '../services/api'
 
 const emit = defineEmits(['toast', 'prev', 'next'])
 
@@ -71,57 +71,83 @@ async function ejecutarAlgoritmo() {
   if (err) return emit('toast', err)
 
   loading.value = true
-  const materias = state.materias.map((m) => ({
-    id: m.id,
-    nombre: m.nombre,
-    codigo: `MAT-${String(m.id).padStart(3, '0')}`,
-    grupos: m.grupos,
-    horas: m.creditos, // el backend convierte horas -> créditos (1..4)
-    categoria: m.categoria,
-  }))
-
-  const profesores = state.profesores.map((p) => ({
-    id: p.id,
-    nombre: p.nombre,
-    codigo: p.profesorId,
-    materias: [p.materiaId],
-  }))
-
-  const payload = {
-    seed: 42,
-    use_ui_data: true,
-    materias,
-    profesores,
-  }
-
-  let out
+  
   try {
-    out = await runScheduler(payload)
+    // Paso 1: Guardar datos en la base de datos
+    emit('toast', 'Guardando datos en la base de datos...')
+    
+    const materias = state.materias.map((m) => ({
+      nombre: m.nombre,
+      creditos: m.creditos,
+      grupos: m.grupos,
+      categoria: m.categoria,
+    }))
+
+    // Crear mapping de ID a nombre de materia
+    const materiaIdToNombre = Object.fromEntries(state.materias.map(m => [m.id, m.nombre]))
+
+    const profesores = state.profesores.map((p) => ({
+      nombre: p.nombre,
+      codigo: p.profesorId,
+      materia_id: materiaIdToNombre[p.materiaId] || p.materiaId, // Usar nombre si existe, sino el ID
+    }))
+
+    await saveData({
+      materias,
+      profesores,
+      clear_existing: true, // Limpiar datos previos
+    })
+
+    emit('toast', '✓ Datos guardados en la base de datos')
+
+    // Paso 2: Ejecutar el algoritmo
+    emit('toast', 'Ejecutando algoritmo de horarios...')
+
+    const payload = {
+      seed: 42,
+      use_ui_data: true,
+      materias: state.materias.map((m) => ({
+        id: m.id,
+        nombre: m.nombre,
+        codigo: `MAT-${String(m.id).padStart(3, '0')}`,
+        grupos: m.grupos,
+        horas: m.creditos, // el backend convierte horas -> créditos (1..4)
+        categoria: m.categoria,
+      })),
+      profesores: state.profesores.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        codigo: p.profesorId,
+        materias: [p.materiaId],
+      })),
+    }
+
+    const out = await runScheduler(payload)
+
+    if (!out) return emit('toast', 'Respuesta inválida del backend.')
+    if (!['OPTIMAL', 'FEASIBLE'].includes(out.status)) {
+      return emit('toast', out.message || `Estado: ${out.status}`)
+    }
+
+    const eventos = Array.isArray(out.df_asig_preview) ? _parseScheduleEvents(out.df_asig_preview) : []
+    if (!eventos.length) {
+      if (out.df_asig_preview) {
+        console.warn('No se pudieron mapear eventos. Datos recibidos:', out.df_asig_preview)
+      }
+      return emit('toast', 'No se pudo generar el calendario desde la respuesta del backend.')
+    }
+
+    resetCalendar()
+    setEventos(eventos)
+    emit('toast', `✓ Horario generado con ${eventos.length} clases`)
+    emit('next')
   } catch (e) {
-    emit('toast', `No se pudo conectar con el backend: ${e.message || 'Error de red'}`)
-    return
+    emit('toast', `Error: ${e.message || 'No se pudo completar la operación'}`)
   } finally {
     loading.value = false
   }
-
-  if (!out) return emit('toast', 'Respuesta inválida del backend.')
-  if (!['OPTIMAL', 'FEASIBLE'].includes(out.status)) {
-    return emit('toast', out.message || `Estado: ${out.status}`)
-  }
-
-  const eventos = Array.isArray(out.df_asig_preview) ? _parseScheduleEvents(out.df_asig_preview) : []
-  if (!eventos.length) {
-    if (out.df_asig_preview) {
-      console.warn('No se pudieron mapear eventos. Datos recibidos:', out.df_asig_preview)
-    }
-    return emit('toast', 'No se pudo generar el calendario desde la respuesta del backend.')
-  }
-
-  resetCalendar()
-  setEventos(eventos)
-  emit('toast', `✓ Horario generado con ${eventos.length} clases`)
-  emit('next')
 }
+
 </script>
 
 <template>

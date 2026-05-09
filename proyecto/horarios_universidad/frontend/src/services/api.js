@@ -30,6 +30,26 @@ export function getDbHealth() {
   return request('/db/health')
 }
 
+export function saveData(payload) {
+  return request('/save-data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function getMaterias() {
+  return request('/materias')
+}
+
+export function getProfesores() {
+  return request('/profesores')
+}
+
+export function clearData() {
+  return request('/clear-data', { method: 'DELETE' })
+}
+
 export function runScheduler(payload) {
   return request('/run', {
     method: 'POST',

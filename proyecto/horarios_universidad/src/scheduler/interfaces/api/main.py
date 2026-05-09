@@ -1,24 +1,34 @@
 # src/scheduler/interfaces/api/main.py
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, List
 from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 import requests
 import json
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+load_dotenv(PROJECT_ROOT / ".env")
 
 from scheduler.application.data_builder import build_data_from_ui
 from scheduler.application.services.run_pipeline import run_pipeline
 from scheduler.config.settings import DEFAULT_CONFIG
-
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
-load_dotenv(PROJECT_ROOT / ".env")
+from scheduler.infrastructure.database import get_db, init_db
+from scheduler.infrastructure.models import Materia, Profesor
+from scheduler.interfaces.api.schemas import (
+    MateriaCreate,
+    MateriaResponse,
+    ProfesorCreate,
+    ProfesorResponse,
+    DataSaveRequest,
+)
 
 app = FastAPI()
 
@@ -32,6 +42,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Initialize database on startup
+try:
+    init_db()
+except Exception as e:
+    print(f"Warning: Could not initialize database: {e}")
 
 
 def build_database_url() -> str:
@@ -149,6 +165,104 @@ def run(payload: RunRequest):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error ejecutando pipeline: {exc}") from exc
+
+
+# =====================
+# ENDPOINTS DE BASE DE DATOS
+# =====================
+
+
+@api_router.post("/save-data")
+def save_data(payload: DataSaveRequest, db: Session = Depends(get_db)):
+    """Guardar materias y profesores en la base de datos"""
+    try:
+        # Opcionalmente limpiar datos existentes
+        if payload.clear_existing:
+            db.query(Profesor).delete()
+            db.query(Materia).delete()
+            db.commit()
+
+        # Mapear IDs temporales a IDs de base de datos
+        id_mapping = {}
+
+        # Guardar materias
+        for mat in payload.materias:
+            # Verificar si ya existe
+            existing = db.query(Materia).filter_by(nombre=mat.nombre).first()
+            if existing:
+                id_mapping[mat.nombre] = existing.id
+            else:
+                new_materia = Materia(
+                    nombre=mat.nombre,
+                    creditos=mat.creditos,
+                    grupos=mat.grupos,
+                    categoria=mat.categoria,
+                )
+                db.add(new_materia)
+                db.flush()
+                id_mapping[mat.nombre] = new_materia.id
+
+        db.commit()
+
+        # Guardar profesores
+        for prof in payload.profesores:
+            # Verificar si ya existe
+            existing = db.query(Profesor).filter_by(codigo=prof.codigo).first()
+            if not existing:
+                # Encontrar el materia_id basado en el nombre si es necesario
+                materia_id = prof.materia_id
+                if isinstance(prof.materia_id, str):
+                    materia_id = id_mapping.get(prof.materia_id)
+                
+                if not materia_id:
+                    continue  # Skip if materia not found
+
+                new_profesor = Profesor(
+                    nombre=prof.nombre,
+                    codigo=prof.codigo,
+                    materia_id=materia_id,
+                )
+                db.add(new_profesor)
+
+        db.commit()
+
+        return {"ok": True, "detail": "Datos guardados exitosamente"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Error guardando datos: {str(e)}") from e
+
+
+@api_router.get("/materias", response_model=List[MateriaResponse])
+def get_materias(db: Session = Depends(get_db)):
+    """Obtener todas las materias de la base de datos"""
+    try:
+        materias = db.query(Materia).all()
+        return materias
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error recuperando materias: {str(e)}") from e
+
+
+@api_router.get("/profesores", response_model=List[ProfesorResponse])
+def get_profesores(db: Session = Depends(get_db)):
+    """Obtener todos los profesores de la base de datos"""
+    try:
+        profesores = db.query(Profesor).all()
+        return profesores
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error recuperando profesores: {str(e)}") from e
+
+
+@api_router.delete("/clear-data")
+def clear_data(db: Session = Depends(get_db)):
+    """Limpiar todas las materias y profesores de la base de datos"""
+    try:
+        db.query(Profesor).delete()
+        db.query(Materia).delete()
+        db.commit()
+        return {"ok": True, "detail": "Datos eliminados exitosamente"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error eliminando datos: {str(e)}") from e
 
 
 # Registrar el router con el prefijo /api
