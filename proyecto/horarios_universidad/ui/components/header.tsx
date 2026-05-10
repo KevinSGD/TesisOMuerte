@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Calendar, LayoutGrid, Settings } from "lucide-react";
+import { Building2, Calendar, LayoutGrid, Database } from "lucide-react";
 
 const navigation = [
   { name: "Salones", href: "/", icon: LayoutGrid },
   { name: "Horario Global", href: "/schedule", icon: Calendar },
+  { name: "Configuración", href: "/setup", icon: Database },
 ];
 
 export function Header() {

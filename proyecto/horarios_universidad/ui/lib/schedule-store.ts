@@ -1,12 +1,15 @@
 "use client";
 
-import { ScheduleEntry, ValidationResult, Room, TIME_SLOTS, DAYS } from "./types";
+import { Subject, Teacher, ScheduleEntry, ValidationResult, Room, TIME_SLOTS, DAYS } from "./types";
 import { colors, initialSchedule, rooms } from "./data";
 
 // Simulated in-memory store
 let scheduleData: ScheduleEntry[] = [...initialSchedule];
 
 const TIME_SLOT_IDS = new Set(TIME_SLOTS.map((slot) => slot.id));
+const SUBJECTS_STORAGE_KEY = "scheduler-ui-materias";
+const TEACHERS_STORAGE_KEY = "scheduler-ui-profesores";
+
 const DEFAULT_PAYLOAD = {
   seed: 42,
   num_profes: 20,
@@ -16,6 +19,68 @@ const DEFAULT_PAYLOAD = {
   materias: [] as Record<string, unknown>[],
   profesores: [] as Record<string, unknown>[],
 };
+
+function safeLoad<T>(key: string): T | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const entry = localStorage.getItem(key);
+    if (!entry) return null;
+    return JSON.parse(entry) as T;
+  } catch {
+    return null;
+  }
+}
+
+function safeSave<T>(key: string, value: T) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+export function getSubjects(): Subject[] {
+  return safeLoad<Subject[]>(SUBJECTS_STORAGE_KEY) ?? [];
+}
+
+export function saveSubjects(subjects: Subject[]): Subject[] {
+  safeSave(SUBJECTS_STORAGE_KEY, subjects);
+  return subjects;
+}
+
+export function getTeachers(): Teacher[] {
+  return safeLoad<Teacher[]>(TEACHERS_STORAGE_KEY) ?? [];
+}
+
+export function saveTeachers(teachers: Teacher[]): Teacher[] {
+  safeSave(TEACHERS_STORAGE_KEY, teachers);
+  return teachers;
+}
+
+function buildUiPayload(): typeof DEFAULT_PAYLOAD {
+  const materias = getSubjects().map((subject) => ({
+    id: subject.id,
+    nombre: subject.name,
+    creditos: subject.credits,
+    grupos: subject.groups,
+  }));
+
+  const profesores = getTeachers().map((teacher) => ({
+    id: teacher.id,
+    nombre: teacher.name,
+    max_materias: teacher.maxSubjects,
+    materias: teacher.assignedSubjects,
+  }));
+
+  if (!materias.length && !profesores.length) {
+    return DEFAULT_PAYLOAD;
+  }
+
+  return {
+    ...DEFAULT_PAYLOAD,
+    num_profes: Math.max(profesores.length, DEFAULT_PAYLOAD.num_profes),
+    use_ui_data: true,
+    materias,
+    profesores,
+  };
+}
 
 export function getSchedule(): ScheduleEntry[] {
   return scheduleData;
@@ -149,7 +214,7 @@ function buildScheduleFromApi(
 ): ScheduleEntry[] {
   const rows = pickAssignments(payload);
   return rows
-    .map((row, idx) => {
+    .map((row, idx): ScheduleEntry | null => {
       const day = normalizeDay(row["Día"] ?? row["dia"] ?? row["day"]);
       const block = normalizeBlock(row["Bloque"] ?? row["bloque"] ?? row["block"]);
       if (!day || !block) return null;
@@ -167,9 +232,9 @@ function buildScheduleFromApi(
         teacher: teacher || "Profesor",
         group: group || "Grupo",
         color,
-      } satisfies ScheduleEntry;
+      };
     })
-    .filter((entry): entry is ScheduleEntry => Boolean(entry));
+    .filter((entry): entry is ScheduleEntry => entry !== null);
 }
 
 function validateScheduleChange(
@@ -240,11 +305,13 @@ function validateScheduleChange(
 }
 
 export async function runOptimizationAlgorithm(): Promise<ValidationResult> {
+  const payload = buildUiPayload();
+
   try {
     const response = await fetch("/api/optimize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(DEFAULT_PAYLOAD),
+      body: JSON.stringify(payload),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || (data && data.ok === false)) {
@@ -255,7 +322,7 @@ export async function runOptimizationAlgorithm(): Promise<ValidationResult> {
       };
     }
 
-    const schedule = buildScheduleFromApi(data, DEFAULT_PAYLOAD.num_salones_comunes);
+    const schedule = buildScheduleFromApi(data, payload.num_salones_comunes);
     if (!schedule.length) {
       return {
         valid: false,

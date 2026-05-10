@@ -16,6 +16,20 @@ export interface TimeSlot {
   label: string;
 }
 
+export interface Subject {
+  id: string;
+  name: string;
+  credits: number;
+  groups: string[];
+}
+
+export interface Teacher {
+  id: string;
+  name: string;
+  maxSubjects: number;
+  assignedSubjects: string[];
+}
+
 export interface ScheduleEntry {
   id: string;
   roomId: string;

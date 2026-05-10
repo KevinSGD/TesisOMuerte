@@ -16,50 +16,51 @@ export function ScheduleGrid({
   onCellClick,
   editable = false,
 }: ScheduleGridProps) {
-  const getEntry = (day: string, timeSlotId: string) => {
-    return schedule.find(
+  const getEntries = (day: string, timeSlotId: string) => {
+    return schedule.filter(
       (entry) => entry.day === day && entry.timeSlotId === timeSlotId
     );
   };
 
   return (
     <div className="overflow-x-auto">
-      <div className="min-w-[900px]">
+      <div className="min-w-[1000px]">
         {/* Header */}
-        <div className="grid grid-cols-[100px_repeat(6,1fr)] gap-1">
+        <div className="grid grid-cols-[140px_repeat(10,1fr)] gap-1">
           <div className="rounded-lg bg-secondary p-3 text-center text-sm font-medium text-muted-foreground">
-            Hora
+            Día / Hora
           </div>
-          {DAYS.map((day) => (
+          {TIME_SLOTS.map((slot) => (
             <div
-              key={day}
+              key={slot.id}
               className="rounded-lg bg-secondary p-3 text-center text-sm font-medium text-foreground"
             >
-              {day}
+              {slot.startTime}
             </div>
           ))}
         </div>
 
-        {/* Time slots */}
+        {/* Days */}
         <div className="mt-1 space-y-1">
-          {TIME_SLOTS.map((slot) => (
+          {DAYS.map((day) => (
             <div
-              key={slot.id}
-              className="grid grid-cols-[100px_repeat(6,1fr)] gap-1"
+              key={day}
+              className="grid grid-cols-[140px_repeat(10,1fr)] gap-1"
             >
-              <div className="flex items-center justify-center rounded-lg bg-secondary/50 p-2 text-xs text-muted-foreground">
-                {slot.label}
+              <div className="flex items-center rounded-lg bg-secondary/50 p-2 text-sm font-medium text-muted-foreground">
+                {day}
               </div>
-              {DAYS.map((day) => {
-                const entry = getEntry(day, slot.id);
+              {TIME_SLOTS.map((slot) => {
+                const entries = getEntries(day, slot.id);
                 return (
                   <ScheduleCell
                     key={`${day}-${slot.id}`}
-                    entry={entry}
+                    entry={entries[0]}
+                    entries={entries}
                     room={room}
                     onClick={
                       editable
-                        ? () => onCellClick?.(day, slot.id, entry)
+                        ? () => onCellClick?.(day, slot.id, entries[0])
                         : undefined
                     }
                     editable={editable}

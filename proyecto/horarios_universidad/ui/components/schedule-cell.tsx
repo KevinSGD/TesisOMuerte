@@ -5,12 +5,20 @@ import { Plus } from "lucide-react";
 
 interface ScheduleCellProps {
   entry?: ScheduleEntry;
+  entries?: ScheduleEntry[];
   room?: Room;
   onClick?: () => void;
   editable?: boolean;
 }
 
-export function ScheduleCell({ entry, onClick, editable }: ScheduleCellProps) {
+export function ScheduleCell({
+  entry,
+  entries,
+  onClick,
+  editable,
+}: ScheduleCellProps) {
+  const extraCount = (entries?.length ?? 0) - 1;
+
   if (!entry) {
     return (
       <div
@@ -43,6 +51,11 @@ export function ScheduleCell({ entry, onClick, editable }: ScheduleCellProps) {
           {entry.teacher}
         </p>
         <p className="text-[10px] font-medium text-primary">{entry.group}</p>
+        {extraCount > 0 && (
+          <p className="text-[10px] text-muted-foreground">
+            +{extraCount} más
+          </p>
+        )}
       </div>
     </div>
   );
