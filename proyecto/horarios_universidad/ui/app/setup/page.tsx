@@ -19,26 +19,45 @@ export default function SetupPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [status, setStatus] = useState<ValidationResult | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
     setSubjects(getSubjects());
     setTeachers(getTeachers());
   }, []);
 
+  const handleSubjectsChange = (updatedSubjects: Subject[]) => {
+    const validSubjectIds = new Set(updatedSubjects.map((subject) => subject.id));
+
+    setSubjects(updatedSubjects);
+    setTeachers((currentTeachers) =>
+      currentTeachers.map((teacher) => ({
+        ...teacher,
+        assignedSubjects: teacher.assignedSubjects.filter((subjectId) =>
+          validSubjectIds.has(subjectId)
+        ),
+      }))
+    );
+  };
+
   const handleSaveData = () => {
     saveSubjects(subjects);
     saveTeachers(teachers);
-    setSaved(true);
     setStatus({ valid: true, message: "Datos guardados localmente." });
-    setTimeout(() => setSaved(false), 3000);
   };
 
   const handleRunAlgorithm = async () => {
+    setIsRunning(true);
+    setStatus({ valid: true, message: "Enviando datos al algoritmo..." });
     saveSubjects(subjects);
     saveTeachers(teachers);
-    const result = await runOptimizationAlgorithm();
-    setStatus(result);
+
+    try {
+      const result = await runOptimizationAlgorithm();
+      setStatus(result);
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   return (
@@ -47,7 +66,9 @@ export default function SetupPage() {
       <main className="mx-auto max-w-[1600px] px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Registro de datos</h1>
+            <h1 className="text-3xl font-bold text-foreground">
+              Registro de datos
+            </h1>
             <p className="mt-2 text-muted-foreground">
               Crea materias y profesores para enviarlos al algoritmo.
             </p>
@@ -56,12 +77,24 @@ export default function SetupPage() {
             <Button type="button" variant="outline" onClick={handleSaveData}>
               Guardar datos
             </Button>
-            <Button type="button" onClick={handleRunAlgorithm}>Enviar al algoritmo</Button>
+            <Button
+              type="button"
+              onClick={handleRunAlgorithm}
+              disabled={isRunning}
+            >
+              {isRunning ? "Ejecutando..." : "Enviar al algoritmo"}
+            </Button>
           </div>
         </div>
 
         {status && (
-          <div className={`mb-6 rounded-lg p-4 ${status.valid ? "bg-success/10 border border-success/30 text-success" : "bg-destructive/10 border border-destructive/30 text-destructive"}`}>
+          <div
+            className={`mb-6 rounded-lg p-4 ${
+              status.valid
+                ? "border border-success/30 bg-success/10 text-success"
+                : "border border-destructive/30 bg-destructive/10 text-destructive"
+            }`}
+          >
             {status.message}
           </div>
         )}
@@ -69,19 +102,28 @@ export default function SetupPage() {
         <div className="grid gap-6 xl:grid-cols-[1.25fr_1fr]">
           <Card className="border border-border bg-card p-6">
             <div className="mb-4">
-              <h2 className="text-xl font-semibold text-foreground">Materias</h2>
+              <h2 className="text-xl font-semibold text-foreground">
+                Materias
+              </h2>
               <p className="text-sm text-muted-foreground">
-                Agrega el número de materias y completa nombre, créditos y grupos.
+                Agrega el numero de materias y completa nombre, creditos y
+                cantidad de grupos.
               </p>
             </div>
-            <SubjectsForm value={subjects} onSubjectsChange={setSubjects} />
+            <SubjectsForm
+              value={subjects}
+              onSubjectsChange={handleSubjectsChange}
+            />
           </Card>
 
           <Card className="border border-border bg-card p-6">
             <div className="mb-4">
-              <h2 className="text-xl font-semibold text-foreground">Profesores</h2>
+              <h2 className="text-xl font-semibold text-foreground">
+                Profesores
+              </h2>
               <p className="text-sm text-muted-foreground">
-                Crea profesores por ID y asigna hasta 5 materias previamente registradas.
+                Crea profesores por ID y asigna materias previamente
+                registradas.
               </p>
             </div>
             <TeachersForm

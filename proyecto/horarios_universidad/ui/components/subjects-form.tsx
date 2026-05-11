@@ -1,290 +1,267 @@
 "use client";
 
-import { useState, useEffect, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { Subject } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Edit2, Trash2, Plus, X } from "lucide-react";
+
+const SUBJECT_CATEGORIES = ["Software", "Humanidades", "Ciencias Basicas"];
 
 interface SubjectsFormProps {
   value?: Subject[];
   onSubjectsChange: (subjects: Subject[]) => void;
 }
 
-export function SubjectsForm({ value = [], onSubjectsChange }: SubjectsFormProps) {
-  const [numSubjects, setNumSubjects] = useState<number>(value.length);
-  const [subjects, setSubjects] = useState<Subject[]>(value);
+function createSubject(index: number, subjects: Subject[]): Subject {
+  const usedIds = new Set(subjects.map((subject) => subject.id));
+  let nextId = index + 1;
+  while (usedIds.has(String(nextId))) nextId += 1;
+
+  return {
+    id: String(nextId),
+    name: "",
+    credits: 0,
+    groups: 0,
+    category: "Software",
+  };
+}
+
+function normalizeSubject(subject: Subject, index: number): Subject {
+  const rawGroups = subject.groups;
+  const groups = Array.isArray(rawGroups)
+    ? rawGroups.length || 1
+    : Math.max(1, Number(rawGroups) || 1);
+
+  return {
+    ...subject,
+    id: /^\d+$/.test(subject.id) ? subject.id : String(index + 1),
+    groups: Number(subject.groups) > 0 ? groups : 0,
+    category: subject.category || "Software",
+  };
+}
+
+export function SubjectsForm({
+  value = [],
+  onSubjectsChange,
+}: SubjectsFormProps) {
+  const [numSubjects, setNumSubjects] = useState<string>(
+    value.length ? String(value.length) : ""
+  );
 
   useEffect(() => {
-    setSubjects(value);
-    setNumSubjects(value.length);
-  }, [value]);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    name: "",
-    credits: "",
-    group: "",
-  });
+    setNumSubjects(value.length ? String(value.length) : "");
+  }, [value.length]);
+
+  const completeSubjects = useMemo(
+    () => value.filter((subject) => subject.name.trim() && subject.groups > 0),
+    [value]
+  );
 
   const syncSubjects = (updated: Subject[]) => {
-    setSubjects(updated);
-    setNumSubjects(updated.length);
     onSubjectsChange(updated);
+    setNumSubjects(updated.length ? String(updated.length) : "");
   };
 
-  const ensureSubjectsCount = (count: number) => {
-    if (count > subjects.length) {
-      const newSubjects = Array(count - subjects.length)
-        .fill(null)
-        .map((_, index) => ({
-          id: `subject-${Date.now()}-${index}`,
-          name: "",
-          credits: 0,
-          groups: [],
-        }));
-      syncSubjects([...subjects, ...newSubjects]);
-    } else if (count < subjects.length) {
-      syncSubjects(subjects.slice(0, count));
+  const ensureSubjectsCount = (count: string) => {
+    const safeCount = Math.max(0, Number(count) || 0);
+
+    if (safeCount > value.length) {
+      const newSubjects = Array.from(
+        { length: safeCount - value.length },
+        (_, index) => createSubject(value.length + index, value)
+      );
+      syncSubjects([...value, ...newSubjects]);
+      return;
     }
+
+    syncSubjects(value.slice(0, safeCount));
   };
 
   const handleNumSubjectsChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const count = Math.max(0, Number(e.target.value) || 0);
-    setNumSubjects(count);
-  };
-
-  const generateSubjectSlots = () => {
-    ensureSubjectsCount(numSubjects);
+    setNumSubjects(e.target.value);
   };
 
   const updateSubject = (id: string, updates: Partial<Subject>) => {
     syncSubjects(
-      subjects.map((subject) =>
+      value.map((subject) =>
         subject.id === id ? { ...subject, ...updates } : subject
       )
     );
   };
 
+  const addSubject = () => {
+    syncSubjects([...value, createSubject(value.length, value)]);
+  };
+
   const removeSubject = (id: string) => {
-    syncSubjects(subjects.filter((subject) => subject.id !== id));
-    if (editingId === id) {
-      setEditingId(null);
-      setFormData({ name: "", credits: "", group: "" });
-    }
-  };
-
-  const startEdit = (subject: Subject) => {
-    setEditingId(subject.id);
-    setFormData({
-      name: subject.name,
-      credits: String(subject.credits),
-      group: "",
-    });
-  };
-
-  const saveEdit = () => {
-    if (!editingId) return;
-    const credits = Number(formData.credits) || 0;
-    updateSubject(editingId, { name: formData.name, credits });
-
-    if (formData.group.trim()) {
-      const subject = subjects.find((item) => item.id === editingId);
-      if (subject && !subject.groups.includes(formData.group.trim())) {
-        updateSubject(editingId, {
-          groups: [...subject.groups, formData.group.trim()],
-        });
-      }
-    }
-
-    setEditingId(null);
-    setFormData({ name: "", credits: "", group: "" });
-  };
-
-  const addGroup = (subjectId: string) => {
-    const group = formData.group.trim();
-    if (!group) return;
-    const subject = subjects.find((item) => item.id === subjectId);
-    if (!subject || subject.groups.includes(group)) return;
-    updateSubject(subjectId, { groups: [...subject.groups, group] });
-    setFormData({ ...formData, group: "" });
-  };
-
-  const removeGroup = (subjectId: string, group: string) => {
-    const subject = subjects.find((item) => item.id === subjectId);
-    if (!subject) return;
-    updateSubject(subjectId, {
-      groups: subject.groups.filter((current) => current !== group),
-    });
+    syncSubjects(value.filter((subject) => subject.id !== id));
   };
 
   return (
     <div className="space-y-6">
-      <Card className="border border-border bg-card p-6">
-        <div className="grid gap-4 sm:grid-cols-[240px_1fr] items-end">
+      <div className="rounded-lg border border-border bg-background p-4">
+        <div className="grid gap-4 sm:grid-cols-[220px_1fr_auto] sm:items-end">
           <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Número de materias
+            <label className="mb-2 block text-sm font-medium text-foreground">
+              Numero de materias
             </label>
             <Input
               type="number"
               min={0}
               value={numSubjects}
               onChange={handleNumSubjectsChange}
-              placeholder="Ingrese número de materias"
+              placeholder="Ej: 6"
             />
           </div>
-          <div className="flex flex-col gap-3 sm:items-end">
-            <p className="text-sm text-muted-foreground">
-              Cada materia puede tener créditos y varios grupos.
-            </p>
-            <Button type="button" size="sm" onClick={generateSubjectSlots} className="max-w-fit">
-              Generar espacios
-            </Button>
-          </div>
+          <p className="text-sm text-muted-foreground">
+            Se generan campos para nombre, creditos y cantidad de grupos.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => ensureSubjectsCount(numSubjects)}
+          >
+            Generar campos
+          </Button>
         </div>
-      </Card>
+      </div>
 
-      {subjects.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-foreground">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">
             Materias registradas
-          </h2>
-          {subjects.map((subject) => (
-            <Card
-              key={subject.id}
-              className="border border-border bg-secondary/30 p-5"
-            >
-              <div className="flex flex-col gap-4">
-                <div className="grid gap-4 md:grid-cols-3">
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {completeSubjects.length} de {value.length} materias tienen nombre y
+            cantidad de grupos.
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={addSubject}>
+          <Plus className="h-4 w-4" />
+          Agregar materia
+        </Button>
+      </div>
+
+      {value.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border bg-secondary/30 p-6 text-sm text-muted-foreground">
+          Ingresa un numero de materias y pulsa Generar campos para empezar.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {value.map((rawSubject, index) => {
+            const subject = normalizeSubject(rawSubject, index);
+
+            return (
+              <Card
+                key={subject.id}
+                className="border border-border bg-secondary/20 p-4"
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs text-muted-foreground">Nombre</p>
                     <p className="text-sm font-medium text-foreground">
-                      {subject.name || "Sin nombre"}
+                      Registro de materia
                     </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Créditos</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {subject.credits}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Grupos</p>
-                    <p className="text-sm font-medium text-foreground">
-                      {subject.groups.length}
+                    <p className="text-xs text-muted-foreground">
+                      {subject.name.trim() ||
+                        `Pendiente por nombrar #${index + 1}`}
                     </p>
                   </div>
                 </div>
-
-                {subject.groups.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {subject.groups.map((group) => (
-                      <button
-                        key={group}
-                        type="button"
-                        className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
-                        onClick={() => removeGroup(subject.id, group)}
-                      >
-                        {group}
-                        <X className="h-3 w-3" />
-                      </button>
+              <div className="grid gap-4 xl:grid-cols-[80px_minmax(180px,1.2fr)_110px_120px_160px_auto] xl:items-end">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    ID
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={subject.id}
+                    onChange={(e) =>
+                      updateSubject(subject.id, {
+                        id: String(Math.max(1, Number(e.target.value) || 1)),
+                      })
+                    }
+                    placeholder="1"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Nombre de la materia
+                  </label>
+                  <Input
+                    value={subject.name}
+                    onChange={(e) =>
+                      updateSubject(subject.id, { name: e.target.value })
+                    }
+                    placeholder="Ej: Matematicas I"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Creditos
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={subject.credits || ""}
+                    onChange={(e) =>
+                      updateSubject(subject.id, {
+                        credits: Math.max(0, Number(e.target.value) || 0),
+                      })
+                    }
+                    placeholder="4"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Cant. grupos
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={subject.groups || ""}
+                    onChange={(e) =>
+                      updateSubject(subject.id, {
+                        groups: Math.max(0, Number(e.target.value) || 0),
+                      })
+                    }
+                    placeholder="2"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Categoria
+                  </label>
+                  <select
+                    value={subject.category}
+                    onChange={(e) =>
+                      updateSubject(subject.id, { category: e.target.value })
+                    }
+                    className="border-input bg-background h-9 w-full rounded-md border px-3 py-1 text-sm text-foreground shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  >
+                    {SUBJECT_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
                     ))}
-                  </div>
-                )}
-
-                <div className="flex flex-wrap items-center gap-2 justify-end">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => startEdit(subject)}
-                    className="gap-2"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                    Editar
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => removeSubject(subject.id)}
-                    className="gap-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Eliminar
-                  </Button>
+                  </select>
                 </div>
-
-                {editingId === subject.id && (
-                  <div className="space-y-4 rounded-lg border border-border bg-background/80 p-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Nombre de la materia
-                        </label>
-                        <Input
-                          value={formData.name}
-                          onChange={(e) =>
-                            setFormData({ ...formData, name: e.target.value })
-                          }
-                          placeholder="Ej: Matemáticas I"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-foreground mb-2">
-                          Créditos
-                        </label>
-                        <Input
-                          type="number"
-                          value={formData.credits}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              credits: e.target.value,
-                            })
-                          }
-                          placeholder="Ej: 4"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Agregar grupo
-                      </label>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <Input
-                          value={formData.group}
-                          onChange={(e) =>
-                            setFormData({ ...formData, group: e.target.value })
-                          }
-                          placeholder="Ej: Grupo A"
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => addGroup(subject.id)}
-                        >
-                          <Plus className="h-4 w-4" />
-                          Agregar grupo
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setEditingId(null)}
-                      >
-                        Cerrar
-                      </Button>
-                      <Button size="sm" onClick={saveEdit}>
-                        Guardar cambios
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => removeSubject(subject.id)}
+                  aria-label={`Eliminar materia ${index + 1}`}
+                  title="Eliminar materia"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

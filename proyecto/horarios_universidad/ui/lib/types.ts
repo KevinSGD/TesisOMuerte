@@ -20,7 +20,8 @@ export interface Subject {
   id: string;
   name: string;
   credits: number;
-  groups: string[];
+  groups: number;
+  category: string;
 }
 
 export interface Teacher {

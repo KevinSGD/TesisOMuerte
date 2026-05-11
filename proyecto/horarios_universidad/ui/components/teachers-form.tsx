@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Check, Trash2, UserPlus } from "lucide-react";
 import { Subject, Teacher } from "@/lib/types";
 
 interface TeachersFormProps {
@@ -13,251 +13,274 @@ interface TeachersFormProps {
   onTeachersChange: (teachers: Teacher[]) => void;
 }
 
+function createTeacher(index: number): Teacher {
+  return {
+    id: String(index + 1),
+    name: "",
+    maxSubjects: 5,
+    assignedSubjects: [],
+  };
+}
+
 export function TeachersForm({
   subjects,
   value = [],
   onTeachersChange,
 }: TeachersFormProps) {
-  const [teachers, setTeachers] = useState<Teacher[]>(value);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [numTeachers, setNumTeachers] = useState<string>(
+    value.length ? String(value.length) : ""
+  );
 
   useEffect(() => {
-    setTeachers(value);
-  }, [value]);
-  const [formData, setFormData] = useState({
-    id: "",
-    name: "",
-    selectedSubjects: [] as string[],
-  });
+    setNumTeachers(value.length ? String(value.length) : "");
+  }, [value.length]);
+
+  const availableSubjects = useMemo(
+    () => subjects.filter((subject) => subject.name.trim()),
+    [subjects]
+  );
 
   const syncTeachers = (updated: Teacher[]) => {
-    setTeachers(updated);
     onTeachersChange(updated);
+    setNumTeachers(updated.length ? String(updated.length) : "");
+  };
+
+  const ensureTeachersCount = (count: string) => {
+    const safeCount = Math.max(0, Number(count) || 0);
+
+    if (safeCount > value.length) {
+      const newTeachers = Array.from(
+        { length: safeCount - value.length },
+        (_, index) => createTeacher(value.length + index)
+      );
+      syncTeachers([...value, ...newTeachers]);
+      return;
+    }
+
+    syncTeachers(value.slice(0, safeCount));
+  };
+
+  const handleNumTeachersChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setNumTeachers(e.target.value);
+  };
+
+  const updateTeacher = (id: string, updates: Partial<Teacher>) => {
+    syncTeachers(
+      value.map((teacher) =>
+        teacher.id === id ? { ...teacher, ...updates } : teacher
+      )
+    );
+  };
+
+  const updateTeacherId = (currentId: string, nextId: string) => {
+    const cleanId = nextId.trim();
+    if (!cleanId) {
+      updateTeacher(currentId, { id: nextId });
+      return;
+    }
+
+    const duplicated = value.some(
+      (teacher) => teacher.id !== currentId && teacher.id === cleanId
+    );
+    if (duplicated) return;
+
+    syncTeachers(
+      value.map((teacher) =>
+        teacher.id === currentId ? { ...teacher, id: cleanId } : teacher
+      )
+    );
   };
 
   const addTeacher = () => {
-    const newTeacher: Teacher = {
-      id: `teacher-${Date.now()}`,
-      name: "",
-      maxSubjects: 5,
-      assignedSubjects: [],
-    };
-    syncTeachers([...teachers, newTeacher]);
-    setEditingId(newTeacher.id);
-    setFormData({ id: newTeacher.id, name: "", selectedSubjects: [] });
-  };
-
-  const editTeacher = (teacher: Teacher) => {
-    setEditingId(teacher.id);
-    setFormData({
-      id: teacher.id,
-      name: teacher.name,
-      selectedSubjects: teacher.assignedSubjects,
-    });
-  };
-
-  const saveTeacher = () => {
-    if (!formData.id.trim()) return;
-    const updated = teachers.map((teacher) =>
-      teacher.id === formData.id
-        ? {
-            ...teacher,
-            name: formData.name,
-            assignedSubjects: formData.selectedSubjects,
-          }
-        : teacher
-    );
-    syncTeachers(updated);
-    setEditingId(null);
-    setFormData({ id: "", name: "", selectedSubjects: [] });
+    syncTeachers([...value, createTeacher(value.length)]);
   };
 
   const removeTeacher = (id: string) => {
-    syncTeachers(teachers.filter((teacher) => teacher.id !== id));
-    if (editingId === id) {
-      setEditingId(null);
-      setFormData({ id: "", name: "", selectedSubjects: [] });
-    }
+    syncTeachers(value.filter((teacher) => teacher.id !== id));
   };
 
-  const toggleSubject = (subjectId: string) => {
-    setFormData((current) => {
-      const assigned = current.selectedSubjects.includes(subjectId)
-        ? current.selectedSubjects.filter((id) => id !== subjectId)
-        : [...current.selectedSubjects, subjectId].slice(0, 5);
-      return { ...current, selectedSubjects: assigned };
-    });
+  const toggleSubject = (teacher: Teacher, subjectId: string) => {
+    const alreadyAssigned = teacher.assignedSubjects.includes(subjectId);
+    const assignedSubjects = alreadyAssigned
+      ? teacher.assignedSubjects.filter((id) => id !== subjectId)
+      : [...teacher.assignedSubjects, subjectId].slice(
+          0,
+          Math.max(1, teacher.maxSubjects)
+        );
+
+    updateTeacher(teacher.id, { assignedSubjects });
   };
 
   return (
     <div className="space-y-6">
-      <Card className="border border-border bg-card p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="rounded-lg border border-border bg-background p-4">
+        <div className="grid gap-4 sm:grid-cols-[220px_1fr_auto] sm:items-end">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">
-              Profesores y asignaciones
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Crea profesores y asígnales hasta 5 materias ya registradas.
-            </p>
+            <label className="mb-2 block text-sm font-medium text-foreground">
+              Numero de profesores
+            </label>
+            <Input
+              type="number"
+              min={0}
+              value={numTeachers}
+              onChange={handleNumTeachersChange}
+              placeholder="Ej: 10"
+            />
           </div>
-          <Button type="button" size="sm" onClick={addTeacher} className="gap-2">
-            <UserPlus className="h-4 w-4" />
-            Agregar profesor
+          <p className="text-sm text-muted-foreground">
+            Cada profesor puede recibir hasta el maximo de materias definido.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => ensureTeachersCount(numTeachers)}
+          >
+            Generar campos
           </Button>
         </div>
-      </Card>
+      </div>
 
-      {teachers.length === 0 && (
-        <Card className="border border-border bg-secondary/30 p-6 text-sm text-muted-foreground">
-          No hay profesores definidos. Crea uno para asignar materias.
-        </Card>
-      )}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-foreground">
+            Profesores y asignaciones
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            {value.length} profesores registrados.
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={addTeacher}>
+          <Plus className="h-4 w-4" />
+          Agregar profesor
+        </Button>
+      </div>
 
-      {teachers.map((teacher) => (
-        <Card key={teacher.id} className="border border-border bg-secondary/30 p-5">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div>
-              <p className="text-xs text-muted-foreground">ID</p>
-              <p className="text-sm font-medium text-foreground">
-                {teacher.id}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Nombre</p>
-              <p className="text-sm font-medium text-foreground">
-                {teacher.name || "Sin nombre"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Materias asignadas</p>
-              <p className="text-sm font-medium text-foreground">
-                {teacher.assignedSubjects.length} / {teacher.maxSubjects}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {teacher.assignedSubjects.map((subjectId) => {
-              const subject = subjects.find((item) => item.id === subjectId);
-              return (
-                <div
-                  key={subjectId}
-                  className="rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
-                >
-                  {subject?.name || subjectId}
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-2 justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => editTeacher(teacher)}
-              className="gap-2"
+      {value.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-border bg-secondary/30 p-6 text-sm text-muted-foreground">
+          Ingresa un numero de profesores y pulsa Generar campos para empezar.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {value.map((teacher, index) => (
+            <Card
+              key={`${teacher.id}-${index}`}
+              className="border border-border bg-secondary/20 p-4"
             >
-              <Check className="h-4 w-4" />
-              Editar
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => removeTeacher(teacher.id)}
-              className="gap-2"
-            >
-              <Trash2 className="h-4 w-4" />
-              Eliminar
-            </Button>
-          </div>
-
-          {editingId === teacher.id && (
-            <div className="mt-6 rounded-lg border border-border bg-background/80 p-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="mb-4">
+                <p className="text-sm font-medium text-foreground">
+                  Registro de profesor
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {teacher.name.trim() || `Pendiente por nombrar #${index + 1}`}
+                </p>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-[150px_minmax(180px,1fr)_130px_auto] lg:items-end">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
-                    ID del profesor
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    ID profesor
                   </label>
                   <Input
-                    value={formData.id}
-                    onChange={(e) =>
-                      setFormData({ ...formData, id: e.target.value })
-                    }
-                    placeholder="Ej: prof-123"
+                    value={teacher.id}
+                    onChange={(e) => updateTeacherId(teacher.id, e.target.value)}
+                    placeholder="1"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-2">
+                  <label className="mb-2 block text-sm font-medium text-foreground">
                     Nombre
                   </label>
                   <Input
-                    value={formData.name}
+                    value={teacher.name}
                     onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
+                      updateTeacher(teacher.id, { name: e.target.value })
                     }
-                    placeholder="Ej: Ana Pérez"
+                    placeholder="Ej: Ana Perez"
                   />
                 </div>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-foreground">
+                    Max. materias
+                  </label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={teacher.maxSubjects}
+                    onChange={(e) => {
+                      const maxSubjects = Math.max(
+                        1,
+                        Number(e.target.value) || 1
+                      );
+                      updateTeacher(teacher.id, {
+                        maxSubjects,
+                        assignedSubjects: teacher.assignedSubjects.slice(
+                          0,
+                          maxSubjects
+                        ),
+                      });
+                    }}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => removeTeacher(teacher.id)}
+                  aria-label={`Eliminar profesor ${index + 1}`}
+                  title="Eliminar profesor"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
 
               <div className="mt-4">
-                <p className="text-sm font-medium text-foreground mb-2">
-                  Asignar materias (máximo 5)
+                <p className="mb-2 text-sm font-medium text-foreground">
+                  Materias asignadas ({teacher.assignedSubjects.length} /{" "}
+                  {teacher.maxSubjects})
                 </p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {subjects.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Registra primero las materias para poder asignarlas.
-                    </p>
-                  ) : (
-                    subjects.map((subject) => {
-                      const isSelected = formData.selectedSubjects.includes(subject.id);
+
+                {availableSubjects.length === 0 ? (
+                  <p className="rounded-md border border-dashed border-border bg-background p-3 text-sm text-muted-foreground">
+                    Registra primero materias con nombre para poder asignarlas.
+                  </p>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {availableSubjects.map((subject) => {
+                      const isSelected = teacher.assignedSubjects.includes(
+                        subject.id
+                      );
+                      const isAtLimit =
+                        !isSelected &&
+                        teacher.assignedSubjects.length >= teacher.maxSubjects;
+
                       return (
                         <button
                           key={subject.id}
                           type="button"
-                          onClick={() => toggleSubject(subject.id)}
-                          className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                          disabled={isAtLimit}
+                          onClick={() => toggleSubject(teacher, subject.id)}
+                          className={`rounded-md border p-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                             isSelected
                               ? "border-primary bg-primary/10 text-foreground"
                               : "border-border bg-background text-muted-foreground hover:border-primary/60"
                           }`}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <div>
-                              <p className="font-medium">{subject.name || "Materia sin nombre"}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {subject.credits} créditos
-                              </p>
-                            </div>
-                            {isSelected && (
-                              <Check className="h-4 w-4 text-primary" />
-                            )}
-                          </div>
+                          <span className="block font-medium">
+                            {subject.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {subject.credits} creditos | {subject.groups} grupos
+                            | {subject.category}
+                          </span>
                         </button>
                       );
-                    })
-                  )}
-                </div>
+                    })}
+                  </div>
+                )}
               </div>
-
-              <div className="mt-4 flex justify-end gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditingId(null)}
-                >
-                  Cancelar
-                </Button>
-                <Button size="sm" onClick={saveTeacher}>
-                  Guardar profesor
-                </Button>
-              </div>
-            </div>
-          )}
-        </Card>
-      ))}
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

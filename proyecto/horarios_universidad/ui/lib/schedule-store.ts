@@ -20,6 +20,10 @@ const DEFAULT_PAYLOAD = {
   profesores: [] as Record<string, unknown>[],
 };
 
+function mapSubjectCategory(category: string): string {
+  return category === "Ciencias Basicas" ? "Ciencias B\u00e1sicas" : category;
+}
+
 function safeLoad<T>(key: string): T | null {
   if (typeof window === "undefined") return null;
   try {
@@ -37,7 +41,16 @@ function safeSave<T>(key: string, value: T) {
 }
 
 export function getSubjects(): Subject[] {
-  return safeLoad<Subject[]>(SUBJECTS_STORAGE_KEY) ?? [];
+  return (safeLoad<Subject[]>(SUBJECTS_STORAGE_KEY) ?? []).map(
+    (subject, index) => ({
+      ...subject,
+      id: /^\d+$/.test(subject.id) ? subject.id : String(index + 1),
+      groups: Array.isArray(subject.groups)
+        ? subject.groups.length || 1
+        : Math.max(0, Number(subject.groups) || 0),
+      category: subject.category || "Software",
+    })
+  );
 }
 
 export function saveSubjects(subjects: Subject[]): Subject[] {
@@ -57,14 +70,16 @@ export function saveTeachers(teachers: Teacher[]): Teacher[] {
 function buildUiPayload(): typeof DEFAULT_PAYLOAD {
   const materias = getSubjects().map((subject) => ({
     id: subject.id,
-    nombre: subject.name,
+    nombre: subject.name.trim(),
     creditos: subject.credits,
+    horas: subject.credits,
+    categoria: mapSubjectCategory(subject.category),
     grupos: subject.groups,
   }));
 
   const profesores = getTeachers().map((teacher) => ({
-    id: teacher.id,
-    nombre: teacher.name,
+    codigo: teacher.id.trim(),
+    nombre: teacher.name.trim(),
     max_materias: teacher.maxSubjects,
     materias: teacher.assignedSubjects,
   }));
@@ -80,6 +95,92 @@ function buildUiPayload(): typeof DEFAULT_PAYLOAD {
     materias,
     profesores,
   };
+}
+
+function validateSetupData(
+  subjects: Subject[],
+  teachers: Teacher[]
+): ValidationResult {
+  if (!subjects.length) {
+    return {
+      valid: false,
+      message: "Agrega al menos una materia antes de ejecutar el algoritmo.",
+    };
+  }
+
+  if (!teachers.length) {
+    return {
+      valid: false,
+      message: "Agrega al menos un profesor antes de ejecutar el algoritmo.",
+    };
+  }
+
+  const subjectIds = new Set<string>();
+  for (const subject of subjects) {
+    const id = subject.id.trim();
+    if (!/^\d+$/.test(id)) {
+      return { valid: false, message: "Cada materia debe tener un ID numerico." };
+    }
+    if (subjectIds.has(id)) {
+      return { valid: false, message: `El ID de materia ${id} esta repetido.` };
+    }
+    subjectIds.add(id);
+
+    if (!subject.name.trim()) {
+      return { valid: false, message: "Todas las materias deben tener nombre." };
+    }
+    if (subject.credits < 1 || subject.credits > 4) {
+      return {
+        valid: false,
+        message: `La materia ${subject.name} debe tener entre 1 y 4 creditos.`,
+      };
+    }
+    if (subject.groups < 1) {
+      return {
+        valid: false,
+        message: `La materia ${subject.name} debe tener al menos un grupo.`,
+      };
+    }
+  }
+
+  const teacherIds = new Set<string>();
+  const coveredSubjectIds = new Set<string>();
+  for (const teacher of teachers) {
+    const id = teacher.id.trim();
+    if (!id) {
+      return { valid: false, message: "Cada profesor debe tener un ID." };
+    }
+    if (teacherIds.has(id)) {
+      return { valid: false, message: `El ID de profesor ${id} esta repetido.` };
+    }
+    teacherIds.add(id);
+
+    if (!teacher.name.trim()) {
+      return { valid: false, message: "Todos los profesores deben tener nombre." };
+    }
+
+    for (const subjectId of teacher.assignedSubjects) {
+      if (!subjectIds.has(subjectId)) {
+        return {
+          valid: false,
+          message: `El profesor ${teacher.name} tiene una materia asignada que ya no existe.`,
+        };
+      }
+      coveredSubjectIds.add(subjectId);
+    }
+  }
+
+  const missingTeacher = subjects.find(
+    (subject) => !coveredSubjectIds.has(subject.id)
+  );
+  if (missingTeacher) {
+    return {
+      valid: false,
+      message: `Asigna al menos un profesor a ${missingTeacher.name}.`,
+    };
+  }
+
+  return { valid: true, message: "Datos listos para enviar al algoritmo." };
 }
 
 export function getSchedule(): ScheduleEntry[] {
@@ -181,6 +282,28 @@ function pickAssignments(payload: unknown): Record<string, unknown>[] {
     if (Array.isArray(nestedObj.assignments)) return nestedObj.assignments as Record<string, unknown>[];
   }
   return [];
+}
+
+function extractApiMessage(payload: unknown, fallback: string) {
+  if (typeof payload === "string") return payload || fallback;
+  if (!payload || typeof payload !== "object") return fallback;
+
+  const data = payload as Record<string, unknown>;
+  const nested = data.data;
+  const candidates = [data.message, data.detail, data.error];
+
+  if (nested && typeof nested === "object") {
+    const nestedObj = nested as Record<string, unknown>;
+    candidates.push(nestedObj.message, nestedObj.detail, nestedObj.error);
+  }
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return fallback;
 }
 
 function hashColorKey(value: string): string {
@@ -305,6 +428,11 @@ function validateScheduleChange(
 }
 
 export async function runOptimizationAlgorithm(): Promise<ValidationResult> {
+  const validation = validateSetupData(getSubjects(), getTeachers());
+  if (!validation.valid) {
+    return validation;
+  }
+
   const payload = buildUiPayload();
 
   try {
@@ -317,8 +445,10 @@ export async function runOptimizationAlgorithm(): Promise<ValidationResult> {
     if (!response.ok || (data && data.ok === false)) {
       return {
         valid: false,
-        message:
-          data?.message || `Error al ejecutar el algoritmo (HTTP ${response.status}).`,
+        message: extractApiMessage(
+          data,
+          `Error al ejecutar el algoritmo (HTTP ${response.status}).`
+        ),
       };
     }
 
