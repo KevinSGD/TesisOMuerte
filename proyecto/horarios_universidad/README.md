@@ -171,6 +171,20 @@ Pasos rápidos:
 > El backend actual usa directamente las tablas `materias` y `profesores`.  
 > El script también incluye tablas para trazabilidad de ejecuciones y eventos de horario para pruebas de eficiencia end-to-end en Railway.
 
+Tablas de trazabilidad incluidas:
+
+- `ejecuciones_algoritmo`: guarda origen de ejecución (`local_backend` o `delegated_railway`), estado, duración y parámetros.
+- `horario_eventos`: guarda el resultado de cada ejecución (día, bloque, salón, grupo, materia y profesor).
+
+Consulta rápida de eficiencia:
+
+```sql
+SELECT source, status, COUNT(*) AS runs, ROUND(AVG(duration_ms)::numeric, 2) AS avg_ms
+FROM ejecuciones_algoritmo
+GROUP BY source, status
+ORDER BY source, status;
+```
+
 ---
 
 ## ✅ Verificar que Funciona
