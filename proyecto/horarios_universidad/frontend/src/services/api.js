@@ -57,3 +57,11 @@ export function runScheduler(payload) {
     body: JSON.stringify(payload),
   })
 }
+
+export function verifySchedule(eventos) {
+  return request('/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ eventos }),
+  })
+}

@@ -19,7 +19,8 @@
       "Bash(npm install *)",
       "Bash(npm run *)",
       "mcp__Claude_Preview__preview_start",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

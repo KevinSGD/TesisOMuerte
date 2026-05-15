@@ -30,4 +30,25 @@ if (Test-Path $venvPython) {
 # Si tienes un endpoint remoto en Railway que ejecuta el algoritmo, define:
 # $env:RAILWAY_RUN_URL = "https://your-railway-service/run"
 
-& $pythonExe -m uvicorn scheduler.interfaces.api.main:app --reload --host 127.0.0.1 --port 8000 --app-dir "$scriptDir\src"
+$listenHost = $env:HOST
+if (-not $listenHost) {
+    $listenHost = if ($env:PORT) { "0.0.0.0" } else { "127.0.0.1" }
+}
+
+$listenPort = $env:PORT
+if (-not $listenPort) {
+    $listenPort = 8000
+}
+
+$uvicornArgs = @(
+    "-m", "uvicorn", "scheduler.interfaces.api.main:app",
+    "--host", $listenHost,
+    "--port", $listenPort,
+    "--app-dir", "$scriptDir\src"
+)
+
+if (-not $env:PORT) {
+    $uvicornArgs += "--reload"
+}
+
+& $pythonExe @uvicornArgs

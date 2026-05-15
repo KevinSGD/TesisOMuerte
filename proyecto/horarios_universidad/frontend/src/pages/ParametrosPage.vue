@@ -10,16 +10,21 @@ const DAY_MAP = { 'Lunes': 0, 'Martes': 1, 'Miércoles': 2, 'Jueves': 3, 'Vierne
 function _parseScheduleEvents(records) {
   if (!Array.isArray(records)) return []
   const eventos = []
-  const materiasMap  = Object.fromEntries(state.materias.map(m  => [m.nombre,  m.id]))
-  const profesoresMap= Object.fromEntries(state.profesores.map(p => [p.nombre,  p.id]))
+  const materiasMap   = Object.fromEntries(state.materias.map(m  => [m.nombre,  m.id]))
+  const profesoresMap = Object.fromEntries(state.profesores.map(p => [p.nombre,  p.id]))
   for (let i = 0; i < records.length; i++) {
     const r = records[i]
-    const dayIndex  = DAY_MAP[r['Día']] ?? 0
-    const bloque    = Number(r['Bloque']) || 0
-    const materiaId = materiasMap[r['Materia']] || null
-    const profesorId= profesoresMap[r['Profesor']] || null
-    const salon     = r['Salón'] || ''
-    const grupo     = Number(r['Curso']) || 1
+    const dayIndex   = DAY_MAP[r['Día']] ?? 0
+    const bloque     = Number(r['Bloque']) || 0
+    const materiaId  = materiasMap[r['Materia']] || null
+    const profesorId = profesoresMap[r['Profesor']] || null
+    const salon      = r['Salón'] || ''
+
+    // Bug fix: Curso field is a string like "CUR_01-G2" — extract group number
+    const cursoStr = String(r['Curso'] || '')
+    const gMatch   = cursoStr.match(/G(\d+)/i)
+    const grupo    = gMatch ? Number(gMatch[1]) : 1
+
     if (!materiaId || !profesorId) continue
     eventos.push({
       id: `evt_${i}_${Date.now()}`,
@@ -32,7 +37,6 @@ function _parseScheduleEvents(records) {
 
 const loading      = ref(false)
 const logMessages  = ref([])
-const showAdvanced = ref(false)
 
 function addLog(msg, type = 'info') {
   logMessages.value.unshift({ msg, type, ts: new Date().toLocaleTimeString('es-CO') })
@@ -41,7 +45,7 @@ function addLog(msg, type = 'info') {
 const resumen = computed(() => ({
   materias:     state.materias.length,
   profesores:   state.profesores.length,
-  asignaciones: state.profesores.filter(p => p.materiaId).length,
+  asignaciones: state.profesores.filter(p => p.materiaIds?.length > 0).length,
   grupos:       state.materias.reduce((s, m) => s + (Number(m.grupos) || 0), 0),
 }))
 
@@ -50,18 +54,18 @@ const listo = computed(() => {
   const matsOk  = state.materias.every(m =>
     (m.nombre || '').trim() && Number(m.creditos) > 0 && Number(m.grupos) > 0 && !m.editing)
   const profsOk = state.profesores.every(p =>
-    (p.nombre || '').trim() && (p.profesorId || '').trim() && p.materiaId && !p.editing)
+    (p.nombre || '').trim() && (p.profesorId || '').trim() && p.materiaIds?.length > 0 && !p.editing)
   return matsOk && profsOk
 })
 
 function validarPrevio() {
-  if (!state.materias.length)    return 'Registra al menos una materia.'
-  if (!state.profesores.length)  return 'Configura al menos un profesor.'
-  const matsOk  = state.materias.every(m =>
+  if (!state.materias.length)   return 'Registra al menos una materia.'
+  if (!state.profesores.length) return 'Configura al menos un profesor.'
+  const matsOk = state.materias.every(m =>
     (m.nombre || '').trim() && Number(m.creditos) > 0 && Number(m.grupos) > 0 && !m.editing)
   if (!matsOk) return 'Asegúrate de guardar todas las materias.'
   const profsOk = state.profesores.every(p =>
-    (p.nombre || '').trim() && (p.profesorId || '').trim() && p.materiaId && !p.editing)
+    (p.nombre || '').trim() && (p.profesorId || '').trim() && p.materiaIds?.length > 0 && !p.editing)
   if (!profsOk) return 'Asegúrate de guardar todos los profesores y asignarles materia.'
   if (!Number(state.tiempoSegundos) || Number(state.tiempoSegundos) < 1)
     return 'Ingresa un tiempo válido en segundos (≥1).'
@@ -77,7 +81,6 @@ async function ejecutarAlgoritmo() {
   addLog('Iniciando proceso de generación de horarios...', 'info')
 
   try {
-    // Step 1: save data
     addLog('Guardando datos en la base de datos...', 'info')
     emit('toast', 'Guardando datos...', 'info')
 
@@ -87,14 +90,16 @@ async function ejecutarAlgoritmo() {
         nombre: m.nombre, creditos: m.creditos, grupos: m.grupos, categoria: m.categoria,
       })),
       profesores: state.profesores.map(p => ({
-        nombre: p.nombre, codigo: p.profesorId,
-        materia_id: materiaIdToNombre[p.materiaId] || p.materiaId,
+        nombre: p.nombre,
+        codigo: p.profesorId,
+        // Send all assigned materias (by name)
+        materia_ids: (p.materiaIds || []).map(id => materiaIdToNombre[id] || id),
+        materia_id: materiaIdToNombre[(p.materiaIds || [])[0]] || null,
       })),
       clear_existing: true,
     })
     addLog('✓ Datos guardados exitosamente', 'success')
 
-    // Step 2: run algorithm
     addLog(`Ejecutando solver CP-SAT (timeout: ${state.tiempoSegundos}s)...`, 'info')
     emit('toast', 'Ejecutando algoritmo...', 'info')
 
@@ -109,7 +114,9 @@ async function ejecutarAlgoritmo() {
         grupos: m.grupos, horas: m.creditos, categoria: m.categoria,
       })),
       profesores: state.profesores.map(p => ({
-        id: p.id, nombre: p.nombre, codigo: p.profesorId, materias: [p.materiaId],
+        id: p.id, nombre: p.nombre, codigo: p.profesorId,
+        // Pass all assigned materia IDs
+        materias: p.materiaIds?.length ? p.materiaIds : [],
       })),
     })
 
@@ -165,7 +172,7 @@ async function ejecutarAlgoritmo() {
       </p>
     </header>
 
-    <!-- ─── Resumen de datos (3 metrics) ─── -->
+    <!-- ─── Resumen de datos ─── -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
       <div
         v-for="(val, key) in resumen" :key="key"
@@ -177,7 +184,7 @@ async function ejecutarAlgoritmo() {
       </div>
     </div>
 
-    <!-- ─── Configuración principal ─── -->
+    <!-- ─── Configuración del Solver ─── -->
     <div class="bg-surface-container rounded-xl border-t-2 border-t-primary border-x border-b border-outline-variant overflow-hidden">
       <div class="p-6 border-b border-outline-variant">
         <h2 class="text-headline-sm font-sans text-on-surface">Configuración del Solver</h2>
@@ -202,12 +209,12 @@ async function ejecutarAlgoritmo() {
             />
             <div class="space-y-1">
               <p class="text-body-sm text-on-surface-variant">Recomendado: 10–60 segundos</p>
-              <p class="text-label-md font-mono text-outline">Más tiempo = mejor solución (hasta cierto punto)</p>
+              <p class="text-label-md font-mono text-outline">Más tiempo = mejor solución</p>
             </div>
           </div>
         </div>
 
-        <!-- Quick presets -->
+        <!-- Presets -->
         <div class="flex flex-wrap gap-2">
           <span class="text-label-md font-mono text-on-surface-variant mr-2 self-center">Presets:</span>
           <button
@@ -222,7 +229,7 @@ async function ejecutarAlgoritmo() {
           >{{ t }}s</button>
         </div>
 
-        <!-- Validación state -->
+        <!-- Validation warning -->
         <div
           v-if="!listo"
           class="flex items-start gap-3 bg-error/10 border border-error/30 rounded-xl px-4 py-3"
@@ -235,7 +242,7 @@ async function ejecutarAlgoritmo() {
               <li v-else-if="state.materias.some(m => m.editing)">Hay materias sin guardar</li>
               <li v-if="!state.profesores.length">Sin profesores registrados</li>
               <li v-else-if="state.profesores.some(p => p.editing)">Hay profesores sin guardar</li>
-              <li v-else-if="state.profesores.some(p => !p.materiaId)">Hay profesores sin materia asignada</li>
+              <li v-else-if="state.profesores.some(p => !p.materiaIds?.length)">Hay profesores sin materia asignada</li>
             </ul>
           </div>
         </div>
@@ -297,11 +304,10 @@ async function ejecutarAlgoritmo() {
           loading
             ? 'bg-primary-container/50 text-on-surface-variant cursor-not-allowed'
             : listo
-              ? 'bg-primary text-on-primary hover:bg-primary-fixed shadow-[0_0_25px_rgba(78,222,163,0.3)]'
+              ? 'bg-primary text-background hover:bg-primary-fixed shadow-[0_0_25px_rgba(78,222,163,0.3)]'
               : 'bg-surface-container-high text-on-surface-variant border border-outline-variant cursor-not-allowed'
         ]"
       >
-        <!-- Spinner mientras carga -->
         <span v-if="loading" class="relative flex h-4 w-4">
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
           <span class="relative inline-flex rounded-full h-4 w-4 bg-primary/50"></span>

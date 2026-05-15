@@ -24,10 +24,15 @@ const profesoresFiltrados = computed(() => {
 
 const profesoresValidos = computed(() =>
   state.profesores.length > 0 &&
-  state.profesores.every(p => (p.nombre || '').trim() && (p.profesorId || '').trim() && p.materiaId)
+  state.profesores.every(p =>
+    (p.nombre || '').trim() &&
+    (p.profesorId || '').trim() &&
+    (p.materiaIds?.length > 0) &&
+    !p.editing
+  )
 )
 
-const asignados = computed(() => state.profesores.filter(p => p.materiaId).length)
+const asignados = computed(() => state.profesores.filter(p => p.materiaIds?.length > 0).length)
 
 function generar() {
   if (!nProfes.value || nProfes.value < 1)
@@ -38,9 +43,9 @@ function generar() {
 }
 
 function guardar(p) {
-  if (!(p.nombre    || '').trim()) return emit('toast', 'El nombre es requerido.', 'error')
-  if (!(p.profesorId|| '').trim()) return emit('toast', 'El ID del profesor es requerido.', 'error')
-  if (!p.materiaId)                return emit('toast', 'Asigna una materia al profesor.', 'error')
+  if (!(p.nombre     || '').trim()) return emit('toast', 'El nombre es requerido.', 'error')
+  if (!(p.profesorId || '').trim()) return emit('toast', 'El ID del profesor es requerido.', 'error')
+  if (!p.materiaIds?.length)        return emit('toast', 'Asigna al menos una materia.', 'error')
   p.editing = false
 }
 
@@ -52,8 +57,8 @@ function eliminar(id) {
 }
 
 function continuar() {
-  if (!state.profesores.length)   return emit('toast', 'Configura al menos un profesor.', 'error')
-  if (!profesoresValidos.value)   return emit('toast', 'Completa y guarda todos los profesores.', 'error')
+  if (!state.profesores.length)  return emit('toast', 'Configura al menos un profesor.', 'error')
+  if (!profesoresValidos.value)  return emit('toast', 'Completa y guarda todos los profesores.', 'error')
   emit('next')
 }
 
@@ -62,15 +67,27 @@ function inicialesProfesor(nombre) {
   return nombre.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
 }
 
-function materiaNombre(id) {
-  return state.materias.find(m => m.id === id)?.nombre || '—'
+function materiaNombres(ids) {
+  if (!ids?.length) return '—'
+  return ids.map(id => state.materias.find(m => m.id === id)?.nombre || '?').join(', ')
 }
 
-// Progress de carga horaria (simulado: creditos / 40 créditos máx)
+// Carga horaria total = suma de créditos de todas las materias asignadas
 function cargaPct(p) {
-  const mat = state.materias.find(m => m.id === p.materiaId)
-  if (!mat) return 0
-  return Math.min(100, Math.round((Number(mat.creditos) / 40) * 100))
+  const ids = p.materiaIds || []
+  const total = ids.reduce((sum, id) => {
+    const mat = state.materias.find(m => m.id === id)
+    return sum + (mat ? Number(mat.creditos) : 0)
+  }, 0)
+  return Math.min(100, Math.round((total / 40) * 100))
+}
+
+function cargaCreditos(p) {
+  const ids = p.materiaIds || []
+  return ids.reduce((sum, id) => {
+    const mat = state.materias.find(m => m.id === id)
+    return sum + (mat ? Number(mat.creditos) : 0)
+  }, 0)
 }
 </script>
 
@@ -222,19 +239,36 @@ function cargaPct(p) {
                 <span v-else class="text-label-md font-mono text-primary">{{ p.profesorId || '—' }}</span>
               </td>
 
-              <!-- Materia -->
+              <!-- Materias (multi-select) -->
               <td class="p-4">
-                <select
-                  v-if="p.editing"
-                  v-model="p.materiaId"
-                  class="w-full bg-surface-container-lowest border border-outline-variant rounded px-3 py-1.5
-                         text-body-sm text-on-surface
-                         focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
-                >
-                  <option :value="null">— Seleccionar materia —</option>
-                  <option v-for="m in materiasOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
-                </select>
-                <span v-else class="text-body-sm text-on-surface">{{ materiaNombre(p.materiaId) }}</span>
+                <div v-if="p.editing" class="flex flex-col gap-1">
+                  <select
+                    multiple
+                    v-model="p.materiaIds"
+                    size="3"
+                    class="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1
+                           text-body-sm text-on-surface
+                           focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+                  >
+                    <option v-for="m in materiasOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
+                  </select>
+                  <span class="text-[10px] font-mono text-outline">Ctrl+clic para seleccionar varias</span>
+                </div>
+                <div v-else class="text-body-sm text-on-surface">
+                  <template v-if="p.materiaIds?.length">
+                    <span
+                      v-for="(mid, idx) in p.materiaIds.slice(0, 2)"
+                      :key="mid"
+                      class="inline-block text-[11px] font-mono bg-primary/10 text-primary rounded px-1.5 py-0.5 mr-1 mb-0.5"
+                    >
+                      {{ state.materias.find(m => m.id === mid)?.nombre || '?' }}
+                    </span>
+                    <span v-if="p.materiaIds.length > 2" class="text-[11px] font-mono text-outline">
+                      +{{ p.materiaIds.length - 2 }} más
+                    </span>
+                  </template>
+                  <span v-else class="text-on-surface-variant">—</span>
+                </div>
               </td>
 
               <!-- Carga (progress bar) -->
@@ -245,12 +279,12 @@ function cargaPct(p) {
                       :style="{ width: cargaPct(p) + '%' }"
                       :class="[
                         'h-full rounded-full transition-all duration-500',
-                        cargaPct(p) > 80 ? 'bg-tertiary-container' : cargaPct(p) > 50 ? 'bg-secondary' : 'bg-primary'
+                        cargaPct(p) > 80 ? 'bg-error' : cargaPct(p) > 50 ? 'bg-secondary' : 'bg-primary'
                       ]"
                     ></div>
                   </div>
                   <span class="text-label-md font-mono text-on-surface whitespace-nowrap">
-                    {{ state.materias.find(m => m.id === p.materiaId)?.creditos || 0 }} cr
+                    {{ cargaCreditos(p) }} cr
                   </span>
                 </div>
               </td>
@@ -260,13 +294,13 @@ function cargaPct(p) {
                 <span
                   :class="[
                     'inline-flex items-center gap-1.5 py-1 px-2 rounded text-label-md font-mono border',
-                    p.materiaId
+                    p.materiaIds?.length
                       ? 'bg-primary-container/20 text-primary border-primary/20'
                       : 'bg-surface-container-highest text-on-surface-variant border-outline-variant'
                   ]"
                 >
-                  <span :class="['w-1.5 h-1.5 rounded-full', p.materiaId ? 'bg-primary' : 'bg-outline']"></span>
-                  {{ p.materiaId ? 'Activo' : 'Sin asignar' }}
+                  <span :class="['w-1.5 h-1.5 rounded-full', p.materiaIds?.length ? 'bg-primary' : 'bg-outline']"></span>
+                  {{ p.materiaIds?.length ? 'Activo' : 'Sin asignar' }}
                 </span>
               </td>
 

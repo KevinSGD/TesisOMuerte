@@ -1,6 +1,6 @@
 # src/scheduler/interfaces/api/schemas.py
 from pydantic import BaseModel, Field
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 
 class MateriaCreate(BaseModel):
@@ -20,11 +20,18 @@ class MateriaResponse(MateriaCreate):
 class ProfesorCreate(BaseModel):
     nombre: str = Field(..., min_length=1)
     codigo: str = Field(..., min_length=1)
-    materia_id: Union[int, str] = Field(...)
+    # materia_id kept for backwards compatibility
+    materia_id: Optional[Union[int, str]] = Field(default=None)
+    # materia_ids: list of materia names or IDs (new, multi-materia support)
+    materia_ids: List[Union[int, str]] = Field(default_factory=list)
 
 
-class ProfesorResponse(ProfesorCreate):
+class ProfesorResponse(BaseModel):
     id: int
+    nombre: str
+    codigo: str
+    materia_id: Optional[int] = None
+    materia_ids_json: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -33,4 +40,18 @@ class ProfesorResponse(ProfesorCreate):
 class DataSaveRequest(BaseModel):
     materias: List[MateriaCreate] = Field(default_factory=list)
     profesores: List[ProfesorCreate] = Field(default_factory=list)
-    clear_existing: bool = False  # If True, clears existing data before saving
+    clear_existing: bool = False
+
+
+class EventoItem(BaseModel):
+    id: str
+    materiaId: Optional[Any] = None
+    profesorId: Optional[Any] = None
+    salon: Optional[str] = ""
+    grupo: Optional[int] = 1
+    dayIndex: int
+    hourIndex: int
+
+
+class VerifyRequest(BaseModel):
+    eventos: List[EventoItem] = Field(default_factory=list)

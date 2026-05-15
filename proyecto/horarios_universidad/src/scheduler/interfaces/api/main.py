@@ -1,4 +1,5 @@
 # src/scheduler/interfaces/api/main.py
+import json
 import os
 from pathlib import Path
 from typing import Any, List
@@ -6,7 +7,6 @@ from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 import requests
-import json
 from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -20,7 +20,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 from scheduler.application.data_builder import build_data_from_ui
 from scheduler.application.services.run_pipeline import run_pipeline
 from scheduler.config.settings import DEFAULT_CONFIG
-from scheduler.infrastructure.database import get_db, init_db
+from scheduler.infrastructure.database import create_db_session, get_db, init_db, is_database_configured
 from scheduler.infrastructure.models import Materia, Profesor
 from scheduler.interfaces.api.schemas import (
     MateriaCreate,
@@ -28,11 +28,10 @@ from scheduler.interfaces.api.schemas import (
     ProfesorCreate,
     ProfesorResponse,
     DataSaveRequest,
+    VerifyRequest,
 )
 
 app = FastAPI()
-
-# Router para endpoints bajo /api
 api_router = APIRouter(prefix="/api")
 
 app.add_middleware(
@@ -43,7 +42,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize database on startup
 try:
     init_db()
 except Exception as e:
@@ -99,29 +97,22 @@ def db_health():
 
 @api_router.get("/run")
 def run_help():
-    return {
-        "ok": False,
-        "detail": "Este endpoint requiere POST con JSON. Usa /docs para probarlo.",
-    }
+    return {"ok": False, "detail": "Este endpoint requiere POST con JSON. Usa /docs para probarlo."}
 
 
 @api_router.post("/run")
 def run(payload: RunRequest):
     cfg = DEFAULT_CONFIG.copy()
-    cfg.update(
-        {
-            "seed": payload.seed,
-            "num_profes": payload.num_profes,
-            "num_salones_comunes": payload.num_salones_comunes,
-            "num_salones_pc": payload.num_salones_pc,
-        }
-    )
+    cfg.update({
+        "seed": payload.seed,
+        "num_profes": payload.num_profes,
+        "num_salones_comunes": payload.num_salones_comunes,
+        "num_salones_pc": payload.num_salones_pc,
+    })
 
     try:
-        # If RAILWAY_RUN_URL is provided, forward the run request to that remote service
         railway_run_url = (os.getenv("RAILWAY_RUN_URL") or "").strip()
         if railway_run_url:
-            # Build JSON payload to send upstream. Keep fields minimal and serializable.
             payload_json = {
                 "seed": payload.seed,
                 "num_profes": payload.num_profes,
@@ -134,7 +125,6 @@ def run(payload: RunRequest):
             try:
                 resp = requests.post(railway_run_url, json=payload_json, timeout=60)
                 resp.raise_for_status()
-                # If the remote returns JSON, pass it through.
                 try:
                     return resp.json()
                 except ValueError:
@@ -142,7 +132,6 @@ def run(payload: RunRequest):
             except requests.RequestException as e:
                 raise HTTPException(status_code=502, detail=f"Error delegando a Railway: {e}") from e
 
-        # Fallback: run locally
         data = None
         if payload.use_ui_data:
             data = build_data_from_ui(cfg, payload.materias, payload.profesores)
@@ -150,10 +139,7 @@ def run(payload: RunRequest):
         result = run_pipeline(cfg, data=data)
         df_asig = result.pop("df_asig", None)
 
-        response = {
-            "ok": result.get("status") in {"OPTIMAL", "FEASIBLE"},
-            **result,
-        }
+        response = {"ok": result.get("status") in {"OPTIMAL", "FEASIBLE"}, **result}
         if df_asig is not None:
             response["df_asig_rows"] = int(len(df_asig))
             response["df_asig_preview"] = df_asig.fillna("").to_dict(orient="records")
@@ -167,94 +153,111 @@ def run(payload: RunRequest):
         raise HTTPException(status_code=500, detail=f"Error ejecutando pipeline: {exc}") from exc
 
 
-# =====================
-# ENDPOINTS DE BASE DE DATOS
-# =====================
-
+# ─── Endpoints de base de datos ───
 
 @api_router.post("/save-data")
-def save_data(payload: DataSaveRequest, db: Session = Depends(get_db)):
+def save_data(payload: DataSaveRequest):
     """Guardar materias y profesores en la base de datos"""
     try:
-        # Opcionalmente limpiar datos existentes
-        if payload.clear_existing:
-            db.query(Profesor).delete()
-            db.query(Materia).delete()
+        if not is_database_configured():
+            return {"ok": True, "detail": "Base de datos no configurada. Se omite el guardado."}
+
+        db = create_db_session()
+        if db is None:
+            return {"ok": True, "detail": "Base de datos no configurada. Se omite el guardado."}
+
+        try:
+            if payload.clear_existing:
+                db.query(Profesor).delete()
+                db.query(Materia).delete()
+                db.commit()
+
+            id_mapping = {}  # nombre → db_id
+
+            for mat in payload.materias:
+                existing = db.query(Materia).filter_by(nombre=mat.nombre).first()
+                if existing:
+                    id_mapping[mat.nombre] = existing.id
+                else:
+                    new_materia = Materia(
+                        nombre=mat.nombre,
+                        creditos=mat.creditos,
+                        grupos=mat.grupos,
+                        categoria=mat.categoria,
+                    )
+                    db.add(new_materia)
+                    db.flush()
+                    id_mapping[mat.nombre] = new_materia.id
+
             db.commit()
 
-        # Mapear IDs temporales a IDs de base de datos
-        id_mapping = {}
+            for prof in payload.profesores:
+                existing = db.query(Profesor).filter_by(codigo=prof.codigo).first()
+                if existing:
+                    continue
 
-        # Guardar materias
-        for mat in payload.materias:
-            # Verificar si ya existe
-            existing = db.query(Materia).filter_by(nombre=mat.nombre).first()
-            if existing:
-                id_mapping[mat.nombre] = existing.id
-            else:
-                new_materia = Materia(
-                    nombre=mat.nombre,
-                    creditos=mat.creditos,
-                    grupos=mat.grupos,
-                    categoria=mat.categoria,
+                # Resolve materia list: prefer materia_ids, fall back to materia_id
+                raw_ids = list(prof.materia_ids) if prof.materia_ids else (
+                    [prof.materia_id] if prof.materia_id else []
                 )
-                db.add(new_materia)
-                db.flush()
-                id_mapping[mat.nombre] = new_materia.id
 
-        db.commit()
+                first_materia_id = None
+                materia_names = []
 
-        # Guardar profesores
-        for prof in payload.profesores:
-            # Verificar si ya existe
-            existing = db.query(Profesor).filter_by(codigo=prof.codigo).first()
-            if not existing:
-                # Encontrar el materia_id basado en el nombre si es necesario
-                materia_id = prof.materia_id
-                if isinstance(prof.materia_id, str):
-                    materia_id = id_mapping.get(prof.materia_id)
-                
-                if not materia_id:
-                    continue  # Skip if materia not found
+                for mid in raw_ids:
+                    if isinstance(mid, str):
+                        db_id = id_mapping.get(mid)
+                        if db_id:
+                            if first_materia_id is None:
+                                first_materia_id = db_id
+                            materia_names.append(mid)
+                    elif isinstance(mid, int):
+                        if first_materia_id is None:
+                            first_materia_id = mid
+                        mat = db.query(Materia).filter_by(id=mid).first()
+                        if mat:
+                            materia_names.append(mat.nombre)
+
+                if first_materia_id is None:
+                    continue
 
                 new_profesor = Profesor(
                     nombre=prof.nombre,
                     codigo=prof.codigo,
-                    materia_id=materia_id,
+                    materia_id=first_materia_id,
+                    materia_ids_json=json.dumps(materia_names, ensure_ascii=False),
                 )
                 db.add(new_profesor)
 
-        db.commit()
-
-        return {"ok": True, "detail": "Datos guardados exitosamente"}
+            db.commit()
+            return {"ok": True, "detail": "Datos guardados exitosamente"}
+        finally:
+            db.close()
     except Exception as e:
-        db.rollback()
+        if 'db' in locals() and db is not None:
+            db.rollback()
+            db.close()
         raise HTTPException(status_code=400, detail=f"Error guardando datos: {str(e)}") from e
 
 
 @api_router.get("/materias", response_model=List[MateriaResponse])
 def get_materias(db: Session = Depends(get_db)):
-    """Obtener todas las materias de la base de datos"""
     try:
-        materias = db.query(Materia).all()
-        return materias
+        return db.query(Materia).all()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error recuperando materias: {str(e)}") from e
 
 
 @api_router.get("/profesores", response_model=List[ProfesorResponse])
 def get_profesores(db: Session = Depends(get_db)):
-    """Obtener todos los profesores de la base de datos"""
     try:
-        profesores = db.query(Profesor).all()
-        return profesores
+        return db.query(Profesor).all()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error recuperando profesores: {str(e)}") from e
 
 
 @api_router.delete("/clear-data")
 def clear_data(db: Session = Depends(get_db)):
-    """Limpiar todas las materias y profesores de la base de datos"""
     try:
         db.query(Profesor).delete()
         db.query(Materia).delete()
@@ -265,5 +268,53 @@ def clear_data(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error eliminando datos: {str(e)}") from e
 
 
-# Registrar el router con el prefijo /api
+@api_router.post("/verify")
+def verify_schedule(payload: VerifyRequest):
+    """Verificar conflictos en el horario: mismo profesor o salón en el mismo bloque."""
+    conflicts = []
+    dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"]
+
+    prof_slots: dict = {}
+    salon_slots: dict = {}
+
+    for e in payload.eventos:
+        day_name = dias[e.dayIndex] if 0 <= e.dayIndex < len(dias) else f"Día {e.dayIndex+1}"
+        bloque = e.hourIndex + 1
+
+        # Conflicto de profesor
+        if e.profesorId is not None:
+            pkey = (str(e.profesorId), e.dayIndex, e.hourIndex)
+            if pkey in prof_slots:
+                conflicts.append({
+                    "type": "profesor",
+                    "severity": "error",
+                    "message": f"Profesor duplicado — {day_name}, bloque {bloque}",
+                    "evento_a": prof_slots[pkey].id,
+                    "evento_b": e.id,
+                })
+            else:
+                prof_slots[pkey] = e
+
+        # Conflicto de salón
+        salon = (e.salon or "").strip()
+        if salon:
+            skey = (salon, e.dayIndex, e.hourIndex)
+            if skey in salon_slots:
+                conflicts.append({
+                    "type": "salon",
+                    "severity": "error",
+                    "message": f"Salón '{salon}' ocupado dos veces — {day_name}, bloque {bloque}",
+                    "evento_a": salon_slots[skey].id,
+                    "evento_b": e.id,
+                })
+            else:
+                salon_slots[skey] = e
+
+    return {
+        "ok": True,
+        "conflict_count": len(conflicts),
+        "conflicts": conflicts,
+    }
+
+
 app.include_router(api_router)

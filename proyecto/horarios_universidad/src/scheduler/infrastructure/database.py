@@ -45,10 +45,32 @@ else:
     SessionLocal = None
 
 
+def is_database_configured() -> bool:
+    return SessionLocal is not None
+
+
+def create_db_session():
+    """Create a database session when configured, otherwise return None."""
+    if not SessionLocal:
+        return None
+    return SessionLocal()
+
+
 def get_db() -> Session:
     """Dependency to get database session"""
     if not SessionLocal:
         raise RuntimeError("Database not configured. Check your .env file.")
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_optional_db():
+    """Return a database session when configured, otherwise None."""
+    if not SessionLocal:
+        return None
     db = SessionLocal()
     try:
         yield db

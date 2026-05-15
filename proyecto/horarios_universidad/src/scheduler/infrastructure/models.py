@@ -1,5 +1,5 @@
 # src/scheduler/infrastructure/models.py
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, create_engine
+from sqlalchemy import Column, Integer, String, Text, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -15,7 +15,6 @@ class Materia(Base):
     grupos = Column(Integer, nullable=False, default=1)
     categoria = Column(String, nullable=False)
 
-    # Relación con profesores
     profesores = relationship("Profesor", back_populates="materia")
 
     def to_dict(self):
@@ -34,9 +33,11 @@ class Profesor(Base):
     id = Column(Integer, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
     codigo = Column(String, unique=True, index=True, nullable=False)
-    materia_id = Column(Integer, ForeignKey("materias.id"), nullable=False)
+    # Primary materia FK (first assigned materia)
+    materia_id = Column(Integer, ForeignKey("materias.id"), nullable=True)
+    # All assigned materias stored as JSON string: '["Materia A","Materia B"]'
+    materia_ids_json = Column(Text, nullable=True)
 
-    # Relación con materia
     materia = relationship("Materia", back_populates="profesores")
 
     def to_dict(self):
@@ -45,4 +46,5 @@ class Profesor(Base):
             "nombre": self.nombre,
             "codigo": self.codigo,
             "materia_id": self.materia_id,
+            "materia_ids_json": self.materia_ids_json,
         }
