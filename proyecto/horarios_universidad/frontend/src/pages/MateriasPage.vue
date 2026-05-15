@@ -1,6 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { addMateria, ensureMateriasCount, removeMateria, state } from '../store/state'
+import { ref } from 'vue'
 
 const emit = defineEmits(['toast', 'next'])
 
@@ -15,6 +16,20 @@ const materiasValidas = computed(() =>
   )
 )
 
+function autoCalcGrupos(m) {
+  const cap = state.salonesConfig.capPorGrupo || 30
+  return Math.max(1, Math.ceil((Number(m.demanda) || 0) / cap))
+}
+
+function toggleAutoGrupos(m) {
+  m.autoGrupos = !m.autoGrupos
+  if (m.autoGrupos) m.grupos = autoCalcGrupos(m)
+}
+
+function onDemandaChange(m) {
+  if (m.autoGrupos) m.grupos = autoCalcGrupos(m)
+}
+
 function generar() {
   if (!nMaterias.value || nMaterias.value < 1)
     return emit('toast', 'Ingresa una cantidad válida (≥1).', 'error')
@@ -22,6 +37,7 @@ function generar() {
 }
 
 function guardar(m) {
+  if (m.autoGrupos) m.grupos = autoCalcGrupos(m)
   if (!(m.nombre || '').trim()) return emit('toast', 'El nombre es requerido.', 'error')
   if (!Number(m.creditos) || Number(m.creditos) < 1) return emit('toast', 'Créditos inválidos (≥1).', 'error')
   if (!Number(m.grupos)   || Number(m.grupos)   < 1) return emit('toast', 'Grupos inválidos (≥1).', 'error')
@@ -94,14 +110,12 @@ function categoriaBadgeClass(cat) {
           :style="{ width: materiasValidas ? '50%' : '5%' }"
         ></div>
         <div class="flex justify-between w-full z-10 relative">
-          <!-- Step 1: Materias (activo) -->
           <div class="flex flex-col items-center gap-2 bg-background px-4">
             <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center border-2 border-background">
               <span class="text-label-md font-mono text-on-primary-fixed font-bold">1</span>
             </div>
             <span class="text-label-md font-mono text-primary">Materias</span>
           </div>
-          <!-- Step 2: Profesores (bloqueado hasta completar) -->
           <div class="flex flex-col items-center gap-2 bg-background px-4">
             <div :class="[
               'w-8 h-8 rounded-full border flex items-center justify-center',
@@ -111,7 +125,6 @@ function categoriaBadgeClass(cat) {
             </div>
             <span class="text-label-md font-mono text-on-surface-variant">Docentes</span>
           </div>
-          <!-- Step 3: Parámetros -->
           <div class="flex flex-col items-center gap-2 bg-background px-4">
             <div class="w-8 h-8 rounded-full bg-surface-container-high border border-outline-variant flex items-center justify-center">
               <span class="text-label-md font-mono text-on-surface-variant">3</span>
@@ -124,7 +137,6 @@ function categoriaBadgeClass(cat) {
 
     <!-- ─── Tabla de Materias ─── -->
     <section class="w-full bg-surface-container rounded-xl border-t-2 border-t-primary border-x border-b border-outline-variant flex flex-col overflow-hidden">
-      <!-- Card header -->
       <div class="p-6 border-b border-outline-variant flex justify-between items-center flex-wrap gap-3">
         <div>
           <h2 class="text-headline-sm font-sans text-on-surface">Paso 1: Materias y Grupos</h2>
@@ -132,7 +144,18 @@ function categoriaBadgeClass(cat) {
             Ingresa el catálogo de materias, créditos y cantidad de grupos a programar.
           </p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="text-label-md font-mono text-on-surface-variant">
+            Cap. por grupo:
+            <input
+              v-model.number="state.salonesConfig.capPorGrupo"
+              type="number" min="1" max="200"
+              class="w-16 ml-2 bg-surface-container-lowest border border-outline-variant rounded px-2 py-1
+                     text-label-md font-mono text-on-surface text-center
+                     focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+              title="Capacidad por grupo (usada en auto-cálculo de grupos)"
+            />
+          </span>
           <span class="text-label-md font-mono text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20">
             {{ state.materias.length }} materias
           </span>
@@ -147,20 +170,21 @@ function categoriaBadgeClass(cat) {
 
       <!-- Table -->
       <div class="w-full overflow-x-auto">
-        <table class="w-full text-left border-collapse min-w-[640px]">
+        <table class="w-full text-left border-collapse min-w-[780px]">
           <thead>
             <tr class="bg-surface-container-low border-b border-outline-variant">
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4 w-8">#</th>
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4">Nombre de Materia</th>
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4 w-32 text-center">Créditos</th>
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4 w-32 text-center">Grupos</th>
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4 w-44">Categoría</th>
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4 text-right w-36">Acciones</th>
+              <th class="text-label-md font-mono text-on-surface-variant px-4 py-4 w-8">#</th>
+              <th class="text-label-md font-mono text-on-surface-variant px-4 py-4">Nombre de Materia</th>
+              <th class="text-label-md font-mono text-on-surface-variant px-4 py-4 w-28 text-center">Créditos</th>
+              <th class="text-label-md font-mono text-on-surface-variant px-4 py-4 w-32 text-center">Demanda</th>
+              <th class="text-label-md font-mono text-on-surface-variant px-4 py-4 w-36 text-center">Grupos</th>
+              <th class="text-label-md font-mono text-on-surface-variant px-4 py-4 w-44">Categoría</th>
+              <th class="text-label-md font-mono text-on-surface-variant px-4 py-4 text-right w-36">Acciones</th>
             </tr>
           </thead>
           <tbody v-if="!state.materias.length">
             <tr>
-              <td colspan="6" class="px-6 py-12 text-center text-on-surface-variant text-body-sm">
+              <td colspan="7" class="px-6 py-12 text-center text-on-surface-variant text-body-sm">
                 <span class="material-symbols-outlined text-[32px] block mb-2 opacity-30">book</span>
                 Sin materias. Ingresa la cantidad arriba y haz clic en "Generar apartados".
               </td>
@@ -173,11 +197,11 @@ function categoriaBadgeClass(cat) {
               class="border-b border-outline-variant hover:bg-surface-container-low/60 transition-colors"
             >
               <!-- Index -->
-              <td class="px-6 py-3 text-label-md font-mono text-on-surface-variant">
+              <td class="px-4 py-3 text-label-md font-mono text-on-surface-variant">
                 {{ String(i + 1).padStart(2, '0') }}
               </td>
               <!-- Nombre -->
-              <td class="px-6 py-3">
+              <td class="px-4 py-3">
                 <input
                   v-if="m.editing"
                   v-model="m.nombre"
@@ -190,7 +214,7 @@ function categoriaBadgeClass(cat) {
                 <span v-else class="text-body-sm text-on-surface font-medium">{{ m.nombre }}</span>
               </td>
               <!-- Créditos -->
-              <td class="px-6 py-3 text-center">
+              <td class="px-4 py-3 text-center">
                 <input
                   v-if="m.editing"
                   v-model.number="m.creditos"
@@ -201,20 +225,63 @@ function categoriaBadgeClass(cat) {
                 />
                 <span v-else class="text-label-md font-mono text-primary">{{ m.creditos }}</span>
               </td>
-              <!-- Grupos -->
-              <td class="px-6 py-3 text-center">
+              <!-- Demanda -->
+              <td class="px-4 py-3 text-center">
                 <input
                   v-if="m.editing"
-                  v-model.number="m.grupos"
-                  type="number" min="1" max="60"
-                  class="w-20 bg-surface-container-lowest border border-outline-variant rounded px-3 py-2
+                  v-model.number="m.demanda"
+                  @input="onDemandaChange(m)"
+                  type="number" min="0" max="9999"
+                  placeholder="0"
+                  class="w-24 bg-surface-container-lowest border border-outline-variant rounded px-3 py-2
                          text-label-md font-mono text-on-surface text-center
                          focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+                  title="Estudiantes que solicitan la materia"
                 />
-                <span v-else class="text-label-md font-mono text-secondary">{{ m.grupos }}</span>
+                <span v-else-if="m.demanda" class="text-label-md font-mono text-on-surface-variant">{{ m.demanda }}</span>
+                <span v-else class="text-label-md font-mono text-outline">—</span>
+              </td>
+              <!-- Grupos + Auto toggle -->
+              <td class="px-4 py-3 text-center">
+                <div v-if="m.editing" class="flex flex-col items-center gap-1.5">
+                  <div class="flex items-center gap-1">
+                    <input
+                      v-model.number="m.grupos"
+                      type="number" min="1" max="60"
+                      :disabled="m.autoGrupos"
+                      :class="[
+                        'w-16 rounded px-2 py-1.5 text-label-md font-mono text-center transition-all',
+                        m.autoGrupos
+                          ? 'bg-surface-container-highest border border-outline-variant/50 text-on-surface-variant cursor-not-allowed opacity-60'
+                          : 'bg-surface-container-lowest border border-outline-variant text-on-surface focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50'
+                      ]"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    @click="toggleAutoGrupos(m)"
+                    :class="[
+                      'text-[10px] font-mono px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1',
+                      m.autoGrupos
+                        ? 'bg-tertiary/15 text-tertiary border-tertiary/30'
+                        : 'bg-surface-container-high text-on-surface-variant border-outline-variant hover:border-tertiary/50 hover:text-tertiary'
+                    ]"
+                    title="Auto-calcular grupos = ceil(demanda / cap. por grupo)"
+                  >
+                    <span class="material-symbols-outlined text-[11px]">{{ m.autoGrupos ? 'bolt' : 'calculate' }}</span>
+                    Auto
+                  </button>
+                </div>
+                <div v-else class="flex items-center justify-center gap-1.5">
+                  <span class="text-label-md font-mono text-secondary">{{ m.grupos }}</span>
+                  <span
+                    v-if="m.autoGrupos"
+                    class="text-[9px] font-mono bg-tertiary/15 text-tertiary border border-tertiary/30 rounded-full px-1.5 py-0.5"
+                  >auto</span>
+                </div>
               </td>
               <!-- Categoría -->
-              <td class="px-6 py-3">
+              <td class="px-4 py-3">
                 <select
                   v-if="m.editing"
                   v-model="m.categoria"
@@ -230,7 +297,7 @@ function categoriaBadgeClass(cat) {
                 >{{ m.categoria }}</span>
               </td>
               <!-- Actions -->
-              <td class="px-6 py-3 text-right">
+              <td class="px-4 py-3 text-right">
                 <div class="flex justify-end gap-1">
                   <button
                     v-if="m.editing"

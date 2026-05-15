@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { moveEvento, removeEvento, resetCalendar, setSalonFilter, state, upsertEvento } from '../store/state'
 import { verifySchedule } from '../services/api'
 
@@ -14,13 +14,17 @@ const conflicts  = ref([])
 const showConflicts = ref(false)
 
 // ─── Room filter ───
-const salonFilterLocal = ref(state.salonFilter || '')
-watch(() => state.salonFilter, v => { salonFilterLocal.value = v || '' })
-
-const uniqueSalones = computed(() => {
-  const s = new Set(state.calendario.eventos.map(e => e.salon).filter(Boolean))
-  return [...s].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+const salonCountMap = computed(() => {
+  const m = {}
+  for (const e of state.calendario.eventos) {
+    if (e.salon) m[e.salon] = (m[e.salon] || 0) + 1
+  }
+  return m
 })
+
+const uniqueSalones = computed(() =>
+  Object.keys(salonCountMap.value).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }))
+)
 
 function changeSalonFilter(val) {
   setSalonFilter(val || null)
@@ -223,7 +227,7 @@ async function verificar() {
       <div class="flex items-center gap-3 flex-wrap">
         <span class="text-label-md font-mono text-on-surface-variant">Filtrar por salón:</span>
         <select
-          :value="salonFilterLocal"
+          :value="state.salonFilter || ''"
           @change="changeSalonFilter($event.target.value)"
           class="bg-surface-container border border-outline-variant rounded-lg px-3 py-1.5
                  text-label-md font-mono text-on-surface
@@ -231,7 +235,7 @@ async function verificar() {
         >
           <option value="">Todos los salones ({{ state.calendario.eventos.length }})</option>
           <option v-for="s in uniqueSalones" :key="s" :value="s">
-            {{ s }} ({{ state.calendario.eventos.filter(e => e.salon === s).length }})
+            {{ s }} ({{ salonCountMap[s] || 0 }})
           </option>
         </select>
         <button

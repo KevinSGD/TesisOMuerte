@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { state, resetCalendar, setEventos, setLastRun } from '../store/state'
+import { state, resetCalendar, setEventos, setLastRun, syncSalones } from '../store/state'
 import { runScheduler, saveData } from '../services/api'
 
 const emit = defineEmits(['toast', 'prev', 'next'])
@@ -20,7 +20,6 @@ function _parseScheduleEvents(records) {
     const profesorId = profesoresMap[r['Profesor']] || null
     const salon      = r['Salón'] || ''
 
-    // Bug fix: Curso field is a string like "CUR_01-G2" — extract group number
     const cursoStr = String(r['Curso'] || '')
     const gMatch   = cursoStr.match(/G(\d+)/i)
     const grupo    = gMatch ? Number(gMatch[1]) : 1
@@ -92,7 +91,6 @@ async function ejecutarAlgoritmo() {
       profesores: state.profesores.map(p => ({
         nombre: p.nombre,
         codigo: p.profesorId,
-        // Send all assigned materias (by name)
         materia_ids: (p.materiaIds || []).map(id => materiaIdToNombre[id] || id),
         materia_id: materiaIdToNombre[(p.materiaIds || [])[0]] || null,
       })),
@@ -115,8 +113,8 @@ async function ejecutarAlgoritmo() {
       })),
       profesores: state.profesores.map(p => ({
         id: p.id, nombre: p.nombre, codigo: p.profesorId,
-        // Pass all assigned materia IDs
         materias: p.materiaIds?.length ? p.materiaIds : [],
+        max_horas: p.maxHoras || 22,
       })),
     })
 
@@ -157,6 +155,14 @@ async function ejecutarAlgoritmo() {
     loading.value = false
   }
 }
+
+// ─── Salon config ───
+function handleSyncSalones() {
+  syncSalones()
+  emit('toast', `Salones sincronizados: ${state.salonesPersonalizados.length} espacios`, 'success')
+}
+
+const TIPOS_SALON = ['comun', 'pc']
 </script>
 
 <template>
@@ -168,7 +174,7 @@ async function ejecutarAlgoritmo() {
         Parámetros del Algoritmo
       </h1>
       <p class="text-body-md text-on-surface-variant mt-2">
-        Configura el tiempo de ejecución y ejecuta el solver de restricciones.
+        Configura el tiempo de ejecución, las aulas disponibles y ejecuta el solver de restricciones.
       </p>
     </header>
 
@@ -181,6 +187,142 @@ async function ejecutarAlgoritmo() {
       >
         <span class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider">{{ key }}</span>
         <span class="text-display-lg font-sans font-bold text-on-surface leading-none">{{ val }}</span>
+      </div>
+    </div>
+
+    <!-- ─── Configuración de Aulas ─── -->
+    <div class="bg-surface-container rounded-xl border-t-2 border-t-secondary border-x border-b border-outline-variant overflow-hidden">
+      <div class="p-6 border-b border-outline-variant">
+        <h2 class="text-headline-sm font-sans text-on-surface">Configuración de Aulas</h2>
+        <p class="text-body-sm text-on-surface-variant mt-1">
+          Define el inventario de espacios físicos. Sincroniza para aplicar los cambios al catálogo.
+        </p>
+      </div>
+
+      <div class="p-6 space-y-6">
+        <!-- Config grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+          <div class="flex flex-col gap-1.5">
+            <label class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider">Labs (PC)</label>
+            <input
+              v-model.number="state.salonesConfig.numPC"
+              type="number" min="0" max="50"
+              class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2.5
+                     text-headline-sm font-mono text-on-surface text-center
+                     focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+            />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider">Salones</label>
+            <input
+              v-model.number="state.salonesConfig.numComunes"
+              type="number" min="0" max="100"
+              class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2.5
+                     text-headline-sm font-mono text-on-surface text-center
+                     focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+            />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider">Cap. Lab</label>
+            <input
+              v-model.number="state.salonesConfig.capPC"
+              type="number" min="1" max="200"
+              class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2.5
+                     text-headline-sm font-mono text-on-surface text-center
+                     focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+            />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider">Cap. Salón</label>
+            <input
+              v-model.number="state.salonesConfig.capComun"
+              type="number" min="1" max="500"
+              class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2.5
+                     text-headline-sm font-mono text-on-surface text-center
+                     focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+            />
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider">Cap./Grupo</label>
+            <input
+              v-model.number="state.salonesConfig.capPorGrupo"
+              type="number" min="1" max="200"
+              class="bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2.5
+                     text-headline-sm font-mono text-on-surface text-center
+                     focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+              title="Capacidad por grupo (usada para auto-calcular grupos en Materias)"
+            />
+          </div>
+        </div>
+
+        <!-- Sync button -->
+        <div class="flex items-center gap-3 flex-wrap">
+          <button
+            @click="handleSyncSalones"
+            class="text-label-md font-mono px-5 py-2.5 rounded-xl border border-secondary/40 text-secondary
+                   bg-secondary/10 hover:bg-secondary hover:text-on-secondary flex items-center gap-2 transition-colors"
+          >
+            <span class="material-symbols-outlined text-[18px]">sync</span>
+            Sincronizar Salones
+          </button>
+          <span class="text-label-md font-mono text-on-surface-variant">
+            {{ state.salonesPersonalizados.length }} espacios configurados
+          </span>
+        </div>
+
+        <!-- Salon list table -->
+        <div v-if="state.salonesPersonalizados.length" class="border border-outline-variant rounded-xl overflow-hidden">
+          <div class="max-h-56 overflow-y-auto">
+            <table class="w-full text-left border-collapse">
+              <thead class="bg-surface-container-high sticky top-0 z-10">
+                <tr class="border-b border-outline-variant">
+                  <th class="px-4 py-2.5 text-label-md font-mono text-on-surface-variant uppercase tracking-wider">Nombre</th>
+                  <th class="px-4 py-2.5 text-label-md font-mono text-on-surface-variant uppercase tracking-wider w-36">Tipo</th>
+                  <th class="px-4 py-2.5 text-label-md font-mono text-on-surface-variant uppercase tracking-wider w-32 text-center">Capacidad</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-outline-variant bg-surface-container-lowest">
+                <tr
+                  v-for="s in state.salonesPersonalizados"
+                  :key="s.nombre"
+                  class="hover:bg-surface-container-low/60 transition-colors"
+                >
+                  <td class="px-4 py-2.5">
+                    <span class="text-body-sm text-on-surface font-medium flex items-center gap-2">
+                      <span :class="['material-symbols-outlined text-[16px]', s.tipo === 'pc' ? 'text-secondary' : 'text-tertiary']">
+                        {{ s.tipo === 'pc' ? 'computer' : 'meeting_room' }}
+                      </span>
+                      {{ s.nombre }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-2.5">
+                    <select
+                      v-model="s.tipo"
+                      class="bg-surface-container border border-outline-variant rounded px-2 py-1
+                             text-label-md font-mono text-on-surface
+                             focus:outline-none focus:border-secondary"
+                    >
+                      <option value="comun">Salón</option>
+                      <option value="pc">Lab PC</option>
+                    </select>
+                  </td>
+                  <td class="px-4 py-2.5 text-center">
+                    <input
+                      v-model.number="s.capacidad"
+                      type="number" min="1" max="500"
+                      class="w-20 bg-surface-container border border-outline-variant rounded px-2 py-1
+                             text-label-md font-mono text-on-surface text-center
+                             focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <p v-else class="text-label-md font-mono text-on-surface-variant">
+          Haz clic en "Sincronizar Salones" para generar el catálogo de espacios.
+        </p>
       </div>
     </div>
 

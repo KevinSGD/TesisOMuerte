@@ -67,27 +67,29 @@ function inicialesProfesor(nombre) {
   return nombre.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
 }
 
-function materiaNombres(ids) {
-  if (!ids?.length) return '—'
-  return ids.map(id => state.materias.find(m => m.id === id)?.nombre || '?').join(', ')
+// ─── Multi-materia chip actions ───
+function addMateriaToProf(p, event) {
+  const id = Number(event.target.value)
+  if (!id) return
+  if (!p.materiaIds) p.materiaIds = []
+  if (!p.materiaIds.includes(id)) p.materiaIds.push(id)
+  event.target.value = ''
 }
 
-// Carga horaria total = suma de créditos de todas las materias asignadas
-function cargaPct(p) {
-  const ids = p.materiaIds || []
-  const total = ids.reduce((sum, id) => {
-    const mat = state.materias.find(m => m.id === id)
-    return sum + (mat ? Number(mat.creditos) : 0)
-  }, 0)
-  return Math.min(100, Math.round((total / 40) * 100))
+function removeMateriaFromProf(p, mid) {
+  p.materiaIds = (p.materiaIds || []).filter(id => id !== mid)
 }
 
+// ─── Carga calculations ───
 function cargaCreditos(p) {
-  const ids = p.materiaIds || []
-  return ids.reduce((sum, id) => {
+  return (p.materiaIds || []).reduce((sum, id) => {
     const mat = state.materias.find(m => m.id === id)
     return sum + (mat ? Number(mat.creditos) : 0)
   }, 0)
+}
+
+function cargaPct(p) {
+  return Math.min(100, Math.round((cargaCreditos(p) / (p.maxHoras || 22)) * 100))
 }
 </script>
 
@@ -172,15 +174,15 @@ function cargaCreditos(p) {
     <!-- ─── Table ─── -->
     <div class="bg-surface-container rounded-xl border border-outline-variant flex flex-col overflow-hidden flex-1 min-h-0">
       <div class="overflow-x-auto overflow-y-auto flex-1">
-        <table class="w-full text-left border-collapse">
+        <table class="w-full text-left border-collapse min-w-[860px]">
           <thead class="bg-surface-container-high sticky top-0 z-10 border-b border-outline-variant">
             <tr>
               <th class="p-4 text-label-md font-mono text-on-surface-variant uppercase tracking-wider">Nombre del Docente</th>
-              <th class="p-4 text-label-md font-mono text-on-surface-variant uppercase tracking-wider w-36">ID / Código</th>
-              <th class="p-4 text-label-md font-mono text-on-surface-variant uppercase tracking-wider">Materia Asignada</th>
-              <th class="p-4 text-label-md font-mono text-on-surface-variant uppercase tracking-wider w-40">Carga (Créditos)</th>
+              <th class="p-4 text-label-md font-mono text-on-surface-variant uppercase tracking-wider w-32">ID / Código</th>
+              <th class="p-4 text-label-md font-mono text-on-surface-variant uppercase tracking-wider">Materias Asignadas</th>
+              <th class="p-4 text-label-md font-mono text-on-surface-variant uppercase tracking-wider w-44">Carga / Máx. h</th>
               <th class="p-4 text-label-md font-mono text-on-surface-variant uppercase tracking-wider w-24">Estado</th>
-              <th class="p-4 text-label-md font-mono text-on-surface-variant uppercase tracking-wider text-right w-32">Acciones</th>
+              <th class="p-4 text-label-md font-mono text-on-surface-variant uppercase tracking-wider text-right w-28">Acciones</th>
             </tr>
           </thead>
 
@@ -239,53 +241,105 @@ function cargaCreditos(p) {
                 <span v-else class="text-label-md font-mono text-primary">{{ p.profesorId || '—' }}</span>
               </td>
 
-              <!-- Materias (multi-select) -->
+              <!-- Materias (chip-based) -->
               <td class="p-4">
-                <div v-if="p.editing" class="flex flex-col gap-1">
+                <!-- Editing: chip list + add dropdown -->
+                <div v-if="p.editing" class="flex flex-col gap-2 min-w-[220px]">
+                  <!-- Chips -->
+                  <div class="flex flex-wrap gap-1 min-h-[26px]">
+                    <span
+                      v-for="mid in (p.materiaIds || [])"
+                      :key="mid"
+                      class="inline-flex items-center gap-1 text-[11px] font-mono
+                             bg-primary/15 text-primary border border-primary/30
+                             rounded-full px-2 py-0.5"
+                    >
+                      <span class="truncate max-w-[100px]">
+                        {{ state.materias.find(m => m.id === mid)?.nombre || '?' }}
+                      </span>
+                      <button
+                        type="button"
+                        @click="removeMateriaFromProf(p, mid)"
+                        class="text-primary/60 hover:text-primary ml-0.5 flex-shrink-0"
+                        title="Quitar materia"
+                      >
+                        <span class="material-symbols-outlined text-[12px]">close</span>
+                      </button>
+                    </span>
+                    <span
+                      v-if="!(p.materiaIds?.length)"
+                      class="text-[11px] font-mono text-on-surface-variant/50 self-center"
+                    >
+                      Sin materias asignadas
+                    </span>
+                  </div>
+                  <!-- Add dropdown -->
                   <select
-                    multiple
-                    v-model="p.materiaIds"
-                    size="3"
-                    class="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1
-                           text-body-sm text-on-surface
+                    @change="addMateriaToProf(p, $event)"
+                    class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1.5
+                           text-[12px] font-mono text-on-surface
                            focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
                   >
-                    <option v-for="m in materiasOptions" :key="m.id" :value="m.id">{{ m.label }}</option>
+                    <option value="">+ Agregar materia...</option>
+                    <option
+                      v-for="m in materiasOptions.filter(m => !(p.materiaIds || []).includes(m.id))"
+                      :key="m.id"
+                      :value="m.id"
+                    >{{ m.label }}</option>
                   </select>
-                  <span class="text-[10px] font-mono text-outline">Ctrl+clic para seleccionar varias</span>
                 </div>
-                <div v-else class="text-body-sm text-on-surface">
+                <!-- View: compact chip list -->
+                <div v-else>
                   <template v-if="p.materiaIds?.length">
-                    <span
-                      v-for="(mid, idx) in p.materiaIds.slice(0, 2)"
-                      :key="mid"
-                      class="inline-block text-[11px] font-mono bg-primary/10 text-primary rounded px-1.5 py-0.5 mr-1 mb-0.5"
-                    >
-                      {{ state.materias.find(m => m.id === mid)?.nombre || '?' }}
-                    </span>
-                    <span v-if="p.materiaIds.length > 2" class="text-[11px] font-mono text-outline">
-                      +{{ p.materiaIds.length - 2 }} más
-                    </span>
+                    <div class="flex flex-wrap gap-1">
+                      <span
+                        v-for="mid in p.materiaIds.slice(0, 3)"
+                        :key="mid"
+                        class="inline-block text-[11px] font-mono bg-primary/10 text-primary rounded-full px-2 py-0.5 border border-primary/20"
+                      >
+                        {{ state.materias.find(m => m.id === mid)?.nombre || '?' }}
+                      </span>
+                      <span v-if="p.materiaIds.length > 3" class="text-[11px] font-mono text-outline self-center">
+                        +{{ p.materiaIds.length - 3 }} más
+                      </span>
+                    </div>
                   </template>
                   <span v-else class="text-on-surface-variant">—</span>
                 </div>
               </td>
 
-              <!-- Carga (progress bar) -->
+              <!-- Carga + maxHoras -->
               <td class="p-4">
-                <div class="flex items-center gap-2">
-                  <div class="flex-1 bg-surface-container-highest h-2 rounded-full overflow-hidden max-w-[80px]">
-                    <div
-                      :style="{ width: cargaPct(p) + '%' }"
-                      :class="[
-                        'h-full rounded-full transition-all duration-500',
-                        cargaPct(p) > 80 ? 'bg-error' : cargaPct(p) > 50 ? 'bg-secondary' : 'bg-primary'
-                      ]"
-                    ></div>
+                <div class="flex flex-col gap-1.5">
+                  <!-- Progress bar + credits -->
+                  <div class="flex items-center gap-2">
+                    <div class="flex-1 bg-surface-container-highest h-2 rounded-full overflow-hidden max-w-[70px]">
+                      <div
+                        :style="{ width: cargaPct(p) + '%' }"
+                        :class="[
+                          'h-full rounded-full transition-all duration-500',
+                          cargaPct(p) > 80 ? 'bg-error' : cargaPct(p) > 50 ? 'bg-secondary' : 'bg-primary'
+                        ]"
+                      ></div>
+                    </div>
+                    <span class="text-label-md font-mono text-on-surface whitespace-nowrap">
+                      {{ cargaCreditos(p) }} cr
+                    </span>
                   </div>
-                  <span class="text-label-md font-mono text-on-surface whitespace-nowrap">
-                    {{ cargaCreditos(p) }} cr
-                  </span>
+                  <!-- maxHoras -->
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-[10px] font-mono text-on-surface-variant">máx:</span>
+                    <input
+                      v-if="p.editing"
+                      v-model.number="p.maxHoras"
+                      type="number" min="1" max="60"
+                      class="w-14 bg-surface-container-lowest border border-outline-variant rounded px-2 py-0.5
+                             text-[11px] font-mono text-on-surface text-center
+                             focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+                      title="Horas máximas por semana"
+                    />
+                    <span v-else class="text-[11px] font-mono text-on-surface-variant">{{ p.maxHoras || 22 }}h/sem</span>
+                  </div>
                 </div>
               </td>
 

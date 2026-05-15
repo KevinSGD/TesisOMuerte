@@ -60,8 +60,12 @@ function getRoomPct(count) {
   return Math.min(100, Math.round((count / maxSlots.value) * 100))
 }
 
+function getRoomNumber(nombre) {
+  return parseInt(nombre.match(/\d+/)?.[0] || '1')
+}
+
 function getRoomLocation(nombre) {
-  const num = parseInt(nombre.match(/\d+/)?.[0] || '1')
+  const num = getRoomNumber(nombre)
   if (nombre.toLowerCase().startsWith('lab'))
     return `Edificio A - Piso ${num <= 6 ? 1 : 2}`
   return `Edificio B - Piso ${num <= 4 ? 1 : 2}`
