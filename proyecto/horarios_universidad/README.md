@@ -155,6 +155,22 @@ $env:DB_PASSWORD = "password"
 $env:RAILWAY_RUN_URL = "https://tu-servicio.railway.app/run"
 ```
 
+### Crear esquema en Railway Postgres
+
+Usa el script:
+
+- `sql/railway_schema.sql`
+
+Pasos rápidos:
+
+1. En Railway abre tu servicio **Postgres**.
+2. Ve a la pestaña **Data** y abre el editor SQL.
+3. Copia y ejecuta el contenido de `sql/railway_schema.sql`.
+4. Configura en el backend las variables `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` y `DB_SSLMODE=require`.
+
+> El backend actual usa directamente las tablas `materias` y `profesores`.  
+> El script también incluye tablas para trazabilidad de ejecuciones y eventos de horario para pruebas de eficiencia end-to-end en Railway.
+
 ---
 
 ## ✅ Verificar que Funciona
