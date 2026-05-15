@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Global Schedule - GestorAulas</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-container": "#00424e",
+                        "on-error-container": "#ffdad6",
+                        "surface-container-lowest": "#060e20",
+                        "secondary-fixed-dim": "#4cd7f6",
+                        "on-surface": "#dae2fd",
+                        "on-tertiary": "#650911",
+                        "inverse-primary": "#006c49",
+                        "error": "#ffb4ab",
+                        "error-container": "#93000a",
+                        "surface-variant": "#2d3449",
+                        "primary-container": "#10b981",
+                        "on-tertiary-container": "#711419",
+                        "on-secondary-fixed": "#001f26",
+                        "on-primary-container": "#00422b",
+                        "surface-container-highest": "#2d3449",
+                        "on-primary-fixed-variant": "#005236",
+                        "on-tertiary-fixed": "#410005",
+                        "tertiary-container": "#fc7c78",
+                        "inverse-on-surface": "#283044",
+                        "primary": "#4edea3",
+                        "on-tertiary-fixed-variant": "#842225",
+                        "surface-container-low": "#131b2e",
+                        "secondary-container": "#03b5d3",
+                        "on-secondary-fixed-variant": "#004e5c",
+                        "secondary": "#4cd7f6",
+                        "secondary-fixed": "#acedff",
+                        "outline-variant": "#3c4a42",
+                        "surface-container-high": "#222a3d",
+                        "tertiary-fixed-dim": "#ffb3af",
+                        "primary-fixed-dim": "#4edea3",
+                        "on-primary-fixed": "#002113",
+                        "surface-bright": "#31394d",
+                        "on-error": "#690005",
+                        "inverse-surface": "#dae2fd",
+                        "background": "#0b1326",
+                        "surface-container": "#171f33",
+                        "on-primary": "#003824",
+                        "surface-dim": "#0b1326",
+                        "outline": "#86948a",
+                        "tertiary": "#ffb3af",
+                        "surface-tint": "#4edea3",
+                        "on-surface-variant": "#bbcabf",
+                        "on-secondary": "#003640",
+                        "on-background": "#dae2fd",
+                        "tertiary-fixed": "#ffdad7",
+                        "surface": "#0b1326",
+                        "primary-fixed": "#6ffbbe"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "gutter": "16px",
+                        "unit": "4px",
+                        "margin-desktop": "32px",
+                        "container-max": "1440px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["JetBrains Mono"],
+                        "headline-md": ["Inter"],
+                        "display-lg-mobile": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-md": ["12px", { "lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-md": ["24px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "display-lg-mobile": ["28px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "display-lg": ["36px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-sm": ["20px", { "lineHeight": "1.4", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md antialiased overflow-hidden flex h-screen">
+<!-- SideNavBar (Shared Component JSON) -->
+<aside class="fixed left-0 top-0 h-full flex flex-col z-40 bg-surface-container dark:bg-surface-container docked h-screen left-0 w-64 border-r border-outline-variant flat no shadows">
+<!-- Header -->
+<div class="px-6 py-8 flex flex-col gap-1 border-b border-outline-variant">
+<h1 class="text-headline-sm font-headline-sm font-black text-primary">GestorAulas</h1>
+<span class="text-label-md font-label-md text-on-surface-variant">Sistema de Horarios</span>
+</div>
+<!-- CTA -->
+<div class="px-4 mt-6 mb-4">
+<button class="w-full bg-primary text-on-primary hover:bg-primary-fixed-dim transition-colors rounded-xl py-3 px-4 flex items-center justify-center gap-2 font-label-md text-label-md">
+<span class="material-symbols-outlined">add</span>
+                Nuevo Horario
+            </button>
+</div>
+<!-- Navigation Tabs -->
+<nav class="flex-1 overflow-y-auto px-2 space-y-1">
+<!-- Active Tab: Dashboard -->
+<a class="bg-primary-container text-on-primary-container rounded-xl mx-2 my-1 px-4 py-3 flex items-center gap-3 text-label-md font-label-md" href="#">
+<span class="material-symbols-outlined filled">dashboard</span>
+                Dashboard
+            </a>
+<a class="text-on-surface-variant hover:bg-surface-container-high rounded-xl mx-2 my-1 px-4 py-3 flex items-center gap-3 hover:bg-surface-container-highest transition-all text-label-md font-label-md" href="#">
+<span class="material-symbols-outlined">school</span>
+                Profesores
+            </a>
+<a class="text-on-surface-variant hover:bg-surface-container-high rounded-xl mx-2 my-1 px-4 py-3 flex items-center gap-3 hover:bg-surface-container-highest transition-all text-label-md font-label-md" href="#">
+<span class="material-symbols-outlined">book</span>
+                Materias
+            </a>
+<a class="text-on-surface-variant hover:bg-surface-container-high rounded-xl mx-2 my-1 px-4 py-3 flex items-center gap-3 hover:bg-surface-container-highest transition-all text-label-md font-label-md" href="#">
+<span class="material-symbols-outlined">group</span>
+                Grupos
+            </a>
+<a class="text-on-surface-variant hover:bg-surface-container-high rounded-xl mx-2 my-1 px-4 py-3 flex items-center gap-3 hover:bg-surface-container-highest transition-all text-label-md font-label-md" href="#">
+<span class="material-symbols-outlined">meeting_room</span>
+                Aulas
+            </a>
+<a class="text-on-surface-variant hover:bg-surface-container-high rounded-xl mx-2 my-1 px-4 py-3 flex items-center gap-3 hover:bg-surface-container-highest transition-all text-label-md font-label-md" href="#">
+<span class="material-symbols-outlined">settings_suggest</span>
+                Configuración
+            </a>
+</nav>
+<!-- Footer -->
+<div class="p-4 border-t border-outline-variant space-y-1">
+<a class="text-on-surface-variant hover:bg-surface-container-high rounded-xl mx-2 my-1 px-4 py-3 flex items-center gap-3 hover:bg-surface-container-highest transition-all text-label-md font-label-md" href="#">
+<span class="material-symbols-outlined">help</span>
+                Ayuda
+            </a>
+<a class="text-on-surface-variant hover:bg-surface-container-high rounded-xl mx-2 my-1 px-4 py-3 flex items-center gap-3 hover:bg-surface-container-highest transition-all text-label-md font-label-md text-error" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Cerrar Sesión
+            </a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col ml-64 bg-background">
+<!-- TopNavBar (Shared Component JSON) -->
+<header class="bg-surface-container-lowest dark:bg-surface-container-lowest docked full-width top-0 border-b border-outline-variant flat no shadows">
+<div class="flex justify-between items-center w-full px-margin-desktop py-unit max-w-container-max mx-auto h-16">
+<!-- Left: Product Name / Search -->
+<div class="flex items-center gap-6">
+<span class="text-headline-md font-headline-md font-bold text-primary dark:text-primary hidden lg:block">GestorAulas</span>
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3 text-on-surface-variant text-sm">search</span>
+<input class="bg-surface-container-high border-none rounded-full py-1.5 pl-10 pr-4 text-body-sm font-body-sm text-on-surface focus:ring-1 focus:ring-primary w-64 placeholder-on-surface-variant" placeholder="Search parameters..." type="text"/>
+</div>
+</div>
+<!-- Center: Navigation Links -->
+<nav class="flex items-center gap-6 text-label-md font-label-md">
+<a class="text-on-surface-variant hover:bg-surface-container-high transition-colors px-2 py-4" href="#">Salones</a>
+<!-- Active Link -->
+<a class="text-primary border-b-2 border-primary pb-1 px-2 py-4 mt-[2px]" href="#">Horario Global</a>
+</nav>
+<!-- Right: Actions -->
+<div class="flex items-center gap-4">
+<button class="bg-secondary-container text-on-secondary-container hover:bg-secondary-fixed transition-colors px-4 py-2 rounded-lg text-label-md font-label-md flex items-center gap-2">
+<span class="material-symbols-outlined text-sm">play_arrow</span>
+                        Ejecutar Algoritmo
+                    </button>
+<div class="flex items-center gap-2 text-on-surface-variant">
+<button class="p-2 hover:bg-surface-container-high transition-colors rounded-full scale-95 duration-150 flex">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 hover:bg-surface-container-high transition-colors rounded-full scale-95 duration-150 flex">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+<!-- Profile Avatar -->
+<div class="w-8 h-8 rounded-full bg-surface-container-high border border-outline-variant flex items-center justify-center overflow-hidden">
+<img alt="User Profile Avatar" class="w-full h-full object-cover" data-alt="A small, circular avatar portrait of a professional individual against a neutral grey background. The lighting is studio quality, soft and even, highlighting modern corporate attire." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA2Y4wD37LOwvQayzHzUUaKEHJ2PKNL8LyuNWsVninc5GiQm7Iq7_ECoyqOtqeeame_8DJz4YJrN9KcjPXb1ozGSttZR6NyoA4vW-Id0g0sCwqReK3WN0fbXGyaZ8fPvDMPEZhG2flHRUg8m1yswquL7CfxxcErc79AG52lzJ1GGU6UkdbcJ_JcMep3XHtPKqYIRbvd4MmsGKYjSXplvweENzgHFWtlflbfUF2L4y4SQQAit8Afx8SuhUAEp_qJLcpkuZ677Tl9jvw"/>
+</div>
+</div>
+</div>
+</header>
+<!-- Canvas / Dashboard Content -->
+<main class="flex-1 overflow-y-auto p-margin-desktop space-y-6">
+<!-- Page Header -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="text-display-lg font-display-lg text-on-surface">Final Results Dashboard</h2>
+<p class="text-body-md font-body-md text-on-surface-variant mt-2">Algorithm iteration completed. Optimized schedule for current academic term.</p>
+</div>
+<div class="flex items-center gap-2 text-label-md font-label-md">
+<span class="px-2 py-1 bg-surface-container-high rounded border border-outline-variant text-on-surface-variant">V 2.4.1</span>
+<span class="px-2 py-1 bg-primary-container text-on-primary-container rounded border border-primary flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">check_circle</span> Solved</span>
+</div>
+</div>
+<!-- Bento Metrics -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<!-- Metric 1 -->
+<div class="bg-surface-container border-t-2 border-primary rounded-lg p-6 shadow-sm flex flex-col justify-between h-32">
+<div class="flex justify-between items-start">
+<span class="text-label-md font-label-md text-on-surface-variant uppercase">Classrooms Active</span>
+<span class="material-symbols-outlined text-primary">meeting_room</span>
+</div>
+<div class="flex items-end gap-2">
+<span class="text-display-lg font-display-lg text-on-surface leading-none">42</span>
+<span class="text-body-sm font-body-sm text-on-surface-variant mb-1">/ 50 total</span>
+</div>
+</div>
+<!-- Metric 2 -->
+<div class="bg-surface-container border border-outline-variant rounded-lg p-6 shadow-sm flex flex-col justify-between h-32">
+<div class="flex justify-between items-start">
+<span class="text-label-md font-label-md text-on-surface-variant uppercase">Total Classes Scheduled</span>
+<span class="material-symbols-outlined text-secondary">class</span>
+</div>
+<div class="flex items-end gap-2">
+<span class="text-display-lg font-display-lg text-on-surface leading-none">340</span>
+<span class="text-body-sm font-body-sm text-primary flex items-center mb-1"><span class="material-symbols-outlined text-[14px]">trending_up</span> +12</span>
+</div>
+</div>
+<!-- Metric 3 -->
+<div class="bg-surface-container border border-outline-variant rounded-lg p-6 shadow-sm flex flex-col justify-between h-32 relative overflow-hidden">
+<div class="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary via-transparent to-transparent"></div>
+<div class="flex justify-between items-start relative z-10">
+<span class="text-label-md font-label-md text-on-surface-variant uppercase">Algorithm Efficiency</span>
+<span class="material-symbols-outlined text-primary">memory</span>
+</div>
+<div class="flex items-end gap-2 relative z-10">
+<span class="text-display-lg font-display-lg text-on-surface leading-none">98.5%</span>
+<span class="text-label-md font-label-md text-on-surface-variant mb-1">Optimal</span>
+</div>
+</div>
+</div>
+<!-- Complex Calendar View -->
+<div class="bg-surface-container border border-outline-variant rounded-lg overflow-hidden flex flex-col h-[600px]">
+<!-- Calendar Toolbar -->
+<div class="px-4 py-3 border-b border-outline-variant bg-surface-container-highest flex justify-between items-center">
+<div class="flex items-center gap-2">
+<button class="p-1 hover:bg-surface-bright rounded text-on-surface-variant transition-colors"><span class="material-symbols-outlined text-sm">chevron_left</span></button>
+<span class="text-label-md font-label-md text-on-surface">Week 1: Set 04 - Set 10</span>
+<button class="p-1 hover:bg-surface-bright rounded text-on-surface-variant transition-colors"><span class="material-symbols-outlined text-sm">chevron_right</span></button>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-1">
+<div class="w-3 h-3 rounded-full bg-primary-container border border-primary"></div>
+<span class="text-label-md font-label-md text-on-surface-variant">Science</span>
+</div>
+<div class="flex items-center gap-1">
+<div class="w-3 h-3 rounded-full bg-secondary-container border border-secondary"></div>
+<span class="text-label-md font-label-md text-on-surface-variant">Humanities</span>
+</div>
+</div>
+</div>
+<!-- Grid Scroll Area -->
+<div class="flex-1 overflow-auto bg-surface-container-lowest">
+<div class="min-w-[900px] grid grid-cols-[80px_repeat(6,1fr)] border-l border-outline-variant">
+<!-- Header Row -->
+<div class="sticky top-0 bg-surface-container-high border-b border-r border-outline-variant z-20"></div>
+<div class="sticky top-0 bg-surface-container-high border-b border-r border-outline-variant p-2 text-center text-label-md font-label-md text-on-surface z-10">Monday</div>
+<div class="sticky top-0 bg-surface-container-high border-b border-r border-outline-variant p-2 text-center text-label-md font-label-md text-on-surface z-10">Tuesday</div>
+<div class="sticky top-0 bg-surface-container-high border-b border-r border-outline-variant p-2 text-center text-label-md font-label-md text-on-surface z-10">Wednesday</div>
+<div class="sticky top-0 bg-surface-container-high border-b border-r border-outline-variant p-2 text-center text-label-md font-label-md text-on-surface z-10">Thursday</div>
+<div class="sticky top-0 bg-surface-container-high border-b border-r border-outline-variant p-2 text-center text-label-md font-label-md text-on-surface z-10">Friday</div>
+<div class="sticky top-0 bg-surface-container-high border-b border-r border-outline-variant p-2 text-center text-label-md font-label-md text-on-surface z-10">Saturday</div>
+<!-- 07:00 Row -->
+<div class="border-b border-r border-outline-variant p-2 text-right text-label-md font-label-md text-on-surface-variant bg-surface-container-high sticky left-0 z-10">07:00</div>
+<div class="border-b border-r border-outline-variant p-1 h-20 relative bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNCIgaGVpZ2h0PSI0IiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik0wIDBINHYxSDB6IiBmaWxsPSIjMWMxYjFmIiBmaWxsLW9wYWNpdHk9IjAuMSIvPjwvc3ZnPg==')]">
+<div class="absolute inset-1 bg-primary-container/20 border border-primary rounded p-1 flex flex-col justify-between hover:bg-primary-container/40 transition-colors cursor-pointer group">
+<span class="text-[10px] font-label-md text-primary font-bold truncate">CS-101</span>
+<span class="text-[9px] font-label-md text-on-surface-variant truncate group-hover:text-on-surface">Room 402</span>
+</div>
+</div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 relative">
+<div class="absolute inset-1 bg-primary-container/20 border border-primary rounded p-1 flex flex-col justify-between hover:bg-primary-container/40 transition-colors cursor-pointer group">
+<span class="text-[10px] font-label-md text-primary font-bold truncate">CS-101</span>
+<span class="text-[9px] font-label-md text-on-surface-variant truncate group-hover:text-on-surface">Room 402</span>
+</div>
+</div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest border-dashed"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 relative">
+<div class="absolute inset-1 bg-secondary-container/20 border border-secondary rounded p-1 flex flex-col justify-between hover:bg-secondary-container/40 transition-colors cursor-pointer group">
+<span class="text-[10px] font-label-md text-secondary font-bold truncate">ENG-204</span>
+<span class="text-[9px] font-label-md text-on-surface-variant truncate group-hover:text-on-surface">Room 110</span>
+</div>
+</div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest"></div>
+<!-- 08:00 Row -->
+<div class="border-b border-r border-outline-variant p-2 text-right text-label-md font-label-md text-on-surface-variant bg-surface-container-high sticky left-0 z-10">08:00</div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 relative">
+<div class="absolute inset-1 bg-tertiary-container/20 border border-tertiary rounded p-1 flex flex-col justify-between hover:bg-tertiary-container/40 transition-colors cursor-pointer group">
+<span class="text-[10px] font-label-md text-tertiary font-bold truncate">MATH-301</span>
+<span class="text-[9px] font-label-md text-on-surface-variant truncate group-hover:text-on-surface">Lab 04</span>
+</div>
+</div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 relative">
+<div class="absolute inset-1 bg-tertiary-container/20 border border-tertiary rounded p-1 flex flex-col justify-between hover:bg-tertiary-container/40 transition-colors cursor-pointer group">
+<span class="text-[10px] font-label-md text-tertiary font-bold truncate">MATH-301</span>
+<span class="text-[9px] font-label-md text-on-surface-variant truncate group-hover:text-on-surface">Lab 04</span>
+</div>
+</div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest border-dashed"></div>
+<!-- 09:00 Row -->
+<div class="border-b border-r border-outline-variant p-2 text-right text-label-md font-label-md text-on-surface-variant bg-surface-container-high sticky left-0 z-10">09:00</div>
+<div class="border-b border-r border-outline-variant p-1 h-20 relative">
+<div class="absolute inset-1 bg-secondary-container/20 border border-secondary rounded p-1 flex flex-col justify-between hover:bg-secondary-container/40 transition-colors cursor-pointer group">
+<span class="text-[10px] font-label-md text-secondary font-bold truncate">HIS-100</span>
+<span class="text-[9px] font-label-md text-on-surface-variant truncate group-hover:text-on-surface">Room 201</span>
+</div>
+</div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 relative">
+<div class="absolute inset-1 bg-secondary-container/20 border border-secondary rounded p-1 flex flex-col justify-between hover:bg-secondary-container/40 transition-colors cursor-pointer group">
+<span class="text-[10px] font-label-md text-secondary font-bold truncate">HIS-100</span>
+<span class="text-[9px] font-label-md text-on-surface-variant truncate group-hover:text-on-surface">Room 201</span>
+</div>
+</div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest border-dashed"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest"></div>
+<!-- 10:00 Row -->
+<div class="border-b border-r border-outline-variant p-2 text-right text-label-md font-label-md text-on-surface-variant bg-surface-container-high sticky left-0 z-10">10:00</div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest border-dashed"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest border-dashed"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest border-dashed"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest border-dashed"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest border-dashed"></div>
+<div class="border-b border-r border-outline-variant p-1 h-20 bg-surface-container-lowest border-dashed"></div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
