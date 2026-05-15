@@ -34,3 +34,17 @@ db.sqlite3-journal
 # OS
 .DS_Store
 Thumbs.db
+
+# Project artifacts
+proyecto.zip
+proyecto/horarios_universidad/outputs/
+*.xlsx
+
+# JS frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Tooling worktrees
+.claire/
+.claude/

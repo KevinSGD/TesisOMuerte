@@ -9,21 +9,31 @@ function nextId(key) {
 }
 
 const defaults = {
-  step: 1,
+  step: 0,
   nextMatId: 1,
   nextProfId: 1,
   materias: [],
   profesores: [],
   tiempoSegundos: 10,
+  salonFilter: null,
+  lastRun: null, // { status, message, timestamp, elapsed }
   calendario: {
     dias: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'],
-    // por defecto coincide con DEFAULT_CONFIG.bloques_por_dia (11) empezando a las 06:00
     horas: ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
     eventos: [],
   },
 }
 
 const loaded = loadState()
+
+// Migrate existing data: materiaId (single) → materiaIds (array)
+if (loaded?.profesores) {
+  for (const p of loaded.profesores) {
+    if (!p.materiaIds) {
+      p.materiaIds = p.materiaId ? [p.materiaId] : []
+    }
+  }
+}
 
 export const state = reactive({
   ...defaults,
@@ -40,6 +50,8 @@ watch(
       materias: state.materias,
       profesores: state.profesores,
       tiempoSegundos: state.tiempoSegundos,
+      salonFilter: state.salonFilter,
+      lastRun: state.lastRun,
       calendario: state.calendario,
     })
   },
@@ -70,7 +82,7 @@ export function ensureProfesoresCount(n) {
       id: nextId('nextProfId'),
       nombre: '',
       profesorId: '',
-      materiaId: null,
+      materiaIds: [],
       editing: true,
     })
   }
@@ -92,9 +104,8 @@ export function addMateria() {
 
 export function removeMateria(id) {
   state.materias = state.materias.filter((m) => m.id !== id)
-  // limpiar asignaciones de profesores
   for (const p of state.profesores) {
-    if (p.materiaId === id) p.materiaId = ''
+    p.materiaIds = (p.materiaIds || []).filter((mid) => mid !== id)
   }
 }
 
@@ -103,7 +114,7 @@ export function addProfesor() {
     id: nextId('nextProfId'),
     nombre: '',
     profesorId: '',
-    materiaId: null,
+    materiaIds: [],
     editing: true,
   })
 }
@@ -114,6 +125,10 @@ export function removeProfesor(id) {
 
 export function setStep(n) {
   state.step = n
+}
+
+export function setSalonFilter(salon) {
+  state.salonFilter = salon || null
 }
 
 export function resetCalendar() {
@@ -139,6 +154,10 @@ export function moveEvento(eventoId, dayIndex, hourIndex) {
 
 export function removeEvento(eventoId) {
   state.calendario.eventos = state.calendario.eventos.filter((e) => e.id !== eventoId)
+}
+
+export function setLastRun(result) {
+  state.lastRun = result
 }
 
 export function generateDemoSchedule() {
@@ -171,4 +190,3 @@ export function generateDemoSchedule() {
   }
   return eventos
 }
-

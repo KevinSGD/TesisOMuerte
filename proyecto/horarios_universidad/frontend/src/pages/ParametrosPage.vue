@@ -1,239 +1,321 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { state, resetCalendar, setEventos } from '../store/state'
+import { state, resetCalendar, setEventos, setLastRun } from '../store/state'
 import { runScheduler, saveData } from '../services/api'
 
 const emit = defineEmits(['toast', 'prev', 'next'])
 
-// Mapeo de días a índices (0=Lunes, 4=Viernes)
-const DAY_MAP = {
-  'Lunes': 0,
-  'Martes': 1,
-  'Miércoles': 2,
-  'Jueves': 3,
-  'Viernes': 4,
-}
+const DAY_MAP = { 'Lunes': 0, 'Martes': 1, 'Miércoles': 2, 'Jueves': 3, 'Viernes': 4 }
 
-// Convertir registro del backend a formato de evento del calendario
 function _parseScheduleEvents(records) {
   if (!Array.isArray(records)) return []
-  
   const eventos = []
-  const materiasMap = Object.fromEntries(state.materias.map(m => [m.nombre, m.id]))
-  const profesoresMap = Object.fromEntries(state.profesores.map(p => [p.nombre, p.id]))
-  
+  const materiasMap   = Object.fromEntries(state.materias.map(m  => [m.nombre,  m.id]))
+  const profesoresMap = Object.fromEntries(state.profesores.map(p => [p.nombre,  p.id]))
   for (let i = 0; i < records.length; i++) {
     const r = records[i]
-    const dayIndex = DAY_MAP[r['Día']] ?? 0
-    const bloque = Number(r['Bloque']) || 0
-    const materiaId = materiasMap[r['Materia']] || null
+    const dayIndex   = DAY_MAP[r['Día']] ?? 0
+    const bloque     = Number(r['Bloque']) || 0
+    const materiaId  = materiasMap[r['Materia']] || null
     const profesorId = profesoresMap[r['Profesor']] || null
-    const salon = r['Salón'] || ''
-    const grupo = Number(r['Curso']) || 1
-    
+    const salon      = r['Salón'] || ''
+
+    // Bug fix: Curso field is a string like "CUR_01-G2" — extract group number
+    const cursoStr = String(r['Curso'] || '')
+    const gMatch   = cursoStr.match(/G(\d+)/i)
+    const grupo    = gMatch ? Number(gMatch[1]) : 1
+
     if (!materiaId || !profesorId) continue
-    
     eventos.push({
       id: `evt_${i}_${Date.now()}`,
-      materiaId,
-      profesorId,
-      salon,
-      grupo,
-      dayIndex,
+      materiaId, profesorId, salon, grupo, dayIndex,
       hourIndex: bloque,
     })
   }
-  
   return eventos
 }
 
-const loading = ref(false)
+const loading      = ref(false)
+const logMessages  = ref([])
+
+function addLog(msg, type = 'info') {
+  logMessages.value.unshift({ msg, type, ts: new Date().toLocaleTimeString('es-CO') })
+}
 
 const resumen = computed(() => ({
-  materias: state.materias.length,
-  profesores: state.profesores.length,
-  asignaciones: state.profesores.filter((p) => p.materiaId).length,
+  materias:     state.materias.length,
+  profesores:   state.profesores.length,
+  asignaciones: state.profesores.filter(p => p.materiaIds?.length > 0).length,
+  grupos:       state.materias.reduce((s, m) => s + (Number(m.grupos) || 0), 0),
 }))
 
+const listo = computed(() => {
+  if (!state.materias.length || !state.profesores.length) return false
+  const matsOk  = state.materias.every(m =>
+    (m.nombre || '').trim() && Number(m.creditos) > 0 && Number(m.grupos) > 0 && !m.editing)
+  const profsOk = state.profesores.every(p =>
+    (p.nombre || '').trim() && (p.profesorId || '').trim() && p.materiaIds?.length > 0 && !p.editing)
+  return matsOk && profsOk
+})
+
 function validarPrevio() {
-  if (!state.materias.length) return 'Registra al menos una materia.'
+  if (!state.materias.length)   return 'Registra al menos una materia.'
   if (!state.profesores.length) return 'Configura al menos un profesor.'
-  const matsOk = state.materias.every((m) => (m.nombre || '').trim() && Number(m.creditos) > 0 && Number(m.grupos) > 0 && !m.editing)
+  const matsOk = state.materias.every(m =>
+    (m.nombre || '').trim() && Number(m.creditos) > 0 && Number(m.grupos) > 0 && !m.editing)
   if (!matsOk) return 'Asegúrate de guardar todas las materias.'
-  const profsOk = state.profesores.every((p) => (p.nombre || '').trim() && (p.profesorId || '').trim() && p.materiaId && !p.editing)
+  const profsOk = state.profesores.every(p =>
+    (p.nombre || '').trim() && (p.profesorId || '').trim() && p.materiaIds?.length > 0 && !p.editing)
   if (!profsOk) return 'Asegúrate de guardar todos los profesores y asignarles materia.'
-  if (!Number(state.tiempoSegundos) || Number(state.tiempoSegundos) < 1) return 'Ingresa un tiempo válido en segundos (≥1).'
+  if (!Number(state.tiempoSegundos) || Number(state.tiempoSegundos) < 1)
+    return 'Ingresa un tiempo válido en segundos (≥1).'
   return null
 }
 
 async function ejecutarAlgoritmo() {
   const err = validarPrevio()
-  if (err) return emit('toast', err)
+  if (err) return emit('toast', err, 'error')
 
-  loading.value = true
-  
+  loading.value     = true
+  logMessages.value = []
+  addLog('Iniciando proceso de generación de horarios...', 'info')
+
   try {
-    // Paso 1: Guardar datos en la base de datos
-    emit('toast', 'Guardando datos en la base de datos...')
-    
-    const materias = state.materias.map((m) => ({
-      nombre: m.nombre,
-      creditos: m.creditos,
-      grupos: m.grupos,
-      categoria: m.categoria,
-    }))
+    addLog('Guardando datos en la base de datos...', 'info')
+    emit('toast', 'Guardando datos...', 'info')
 
-    // Crear mapping de ID a nombre de materia
     const materiaIdToNombre = Object.fromEntries(state.materias.map(m => [m.id, m.nombre]))
-
-    const profesores = state.profesores.map((p) => ({
-      nombre: p.nombre,
-      codigo: p.profesorId,
-      materia_id: materiaIdToNombre[p.materiaId] || p.materiaId, // Usar nombre si existe, sino el ID
-    }))
-
     await saveData({
-      materias,
-      profesores,
-      clear_existing: true, // Limpiar datos previos
-    })
-
-    emit('toast', '✓ Datos guardados en la base de datos')
-
-    // Paso 2: Ejecutar el algoritmo
-    emit('toast', 'Ejecutando algoritmo de horarios...')
-
-    const payload = {
-      seed: 42,
-      use_ui_data: true,
-      materias: state.materias.map((m) => ({
-        id: m.id,
-        nombre: m.nombre,
-        codigo: `MAT-${String(m.id).padStart(3, '0')}`,
-        grupos: m.grupos,
-        horas: m.creditos, // el backend convierte horas -> créditos (1..4)
-        categoria: m.categoria,
+      materias: state.materias.map(m => ({
+        nombre: m.nombre, creditos: m.creditos, grupos: m.grupos, categoria: m.categoria,
       })),
-      profesores: state.profesores.map((p) => ({
-        id: p.id,
+      profesores: state.profesores.map(p => ({
         nombre: p.nombre,
         codigo: p.profesorId,
-        materias: [p.materiaId],
+        // Send all assigned materias (by name)
+        materia_ids: (p.materiaIds || []).map(id => materiaIdToNombre[id] || id),
+        materia_id: materiaIdToNombre[(p.materiaIds || [])[0]] || null,
       })),
-    }
+      clear_existing: true,
+    })
+    addLog('✓ Datos guardados exitosamente', 'success')
 
-    const out = await runScheduler(payload)
+    addLog(`Ejecutando solver CP-SAT (timeout: ${state.tiempoSegundos}s)...`, 'info')
+    emit('toast', 'Ejecutando algoritmo...', 'info')
 
-    if (!out) return emit('toast', 'Respuesta inválida del backend.')
+    const t0 = Date.now()
+    const out = await runScheduler({
+      seed: 42,
+      max_time_seconds: Number(state.tiempoSegundos),
+      use_ui_data: true,
+      materias: state.materias.map(m => ({
+        id: m.id, nombre: m.nombre,
+        codigo: `MAT-${String(m.id).padStart(3, '0')}`,
+        grupos: m.grupos, horas: m.creditos, categoria: m.categoria,
+      })),
+      profesores: state.profesores.map(p => ({
+        id: p.id, nombre: p.nombre, codigo: p.profesorId,
+        // Pass all assigned materia IDs
+        materias: p.materiaIds?.length ? p.materiaIds : [],
+      })),
+    })
+
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(1)
+
+    if (!out) { addLog('Respuesta inválida del backend.', 'error'); return emit('toast', 'Respuesta inválida.', 'error') }
     if (!['OPTIMAL', 'FEASIBLE'].includes(out.status)) {
-      return emit('toast', out.message || `Estado: ${out.status}`)
+      addLog(`Estado: ${out.status} — ${out.message || ''}`, 'error')
+      return emit('toast', out.message || `Estado: ${out.status}`, 'error')
     }
+
+    addLog(`✓ Solver completado en ${elapsed}s — Estado: ${out.status}`, 'success')
 
     const eventos = Array.isArray(out.df_asig_preview) ? _parseScheduleEvents(out.df_asig_preview) : []
     if (!eventos.length) {
-      if (out.df_asig_preview) {
-        console.warn('No se pudieron mapear eventos. Datos recibidos:', out.df_asig_preview)
-      }
-      return emit('toast', 'No se pudo generar el calendario desde la respuesta del backend.')
+      addLog('No se pudieron mapear eventos del resultado.', 'error')
+      return emit('toast', 'No se pudo generar el calendario. Revisa la consola.', 'error')
     }
+
+    addLog(`✓ ${eventos.length} clases mapeadas al calendario`, 'success')
 
     resetCalendar()
     setEventos(eventos)
-    emit('toast', `✓ Horario generado con ${eventos.length} clases`)
+    setLastRun({
+      status: out.status,
+      message: out.message || out.status,
+      timestamp: new Date().toISOString(),
+      elapsed: parseFloat(elapsed),
+    })
+
+    emit('toast', `Horario generado: ${eventos.length} clases (${out.status})`, 'success')
     emit('next')
   } catch (e) {
-    emit('toast', `Error: ${e.message || 'No se pudo completar la operación'}`)
+    const msg = e.message || 'No se pudo completar la operación'
+    addLog(`Error: ${msg}`, 'error')
+    emit('toast', `Error: ${msg}`, 'error')
   } finally {
     loading.value = false
   }
 }
-
 </script>
 
 <template>
-  <div class="ph">
-    <div class="ph-icon" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="1.8" stroke-linecap="round">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" />
-      </svg>
-    </div>
-    <div>
-      <div class="ph-title">Parámetros</div>
-      <div class="ph-desc">Ingresa el tiempo en segundos. Luego genera (demo) o importa el resultado de tu algoritmo para ver el calendario.</div>
-    </div>
-  </div>
+  <div class="px-4 md:px-margin-desktop py-8 max-w-[1024px] mx-auto flex flex-col gap-8">
 
-  <div class="card">
-    <div class="card-title">Resumen</div>
-    <div class="fg fg-3">
-      <div class="card" style="margin:0; text-align:center;">
-        <div style="font-family:var(--mono); font-size:2rem; font-weight:800; color:var(--cyan); line-height:1;">
-          {{ resumen.materias }}
-        </div>
-        <div style="font-size:.72rem; color:var(--t3); text-transform:uppercase; letter-spacing:.08em; font-family:var(--mono);">
-          Materias
-        </div>
+    <!-- ─── Header ─── -->
+    <header>
+      <h1 class="text-display-lg-mobile md:text-display-lg font-sans font-bold text-on-surface">
+        Parámetros del Algoritmo
+      </h1>
+      <p class="text-body-md text-on-surface-variant mt-2">
+        Configura el tiempo de ejecución y ejecuta el solver de restricciones.
+      </p>
+    </header>
+
+    <!-- ─── Resumen de datos ─── -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div
+        v-for="(val, key) in resumen" :key="key"
+        class="bg-surface-container border border-outline-variant rounded-xl p-5
+               flex flex-col gap-2 hover:border-primary/40 transition-colors"
+      >
+        <span class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider">{{ key }}</span>
+        <span class="text-display-lg font-sans font-bold text-on-surface leading-none">{{ val }}</span>
       </div>
-      <div class="card" style="margin:0; text-align:center;">
-        <div style="font-family:var(--mono); font-size:2rem; font-weight:800; color:var(--cyan); line-height:1;">
-          {{ resumen.profesores }}
-        </div>
-        <div style="font-size:.72rem; color:var(--t3); text-transform:uppercase; letter-spacing:.08em; font-family:var(--mono);">
-          Profesores
-        </div>
+    </div>
+
+    <!-- ─── Configuración del Solver ─── -->
+    <div class="bg-surface-container rounded-xl border-t-2 border-t-primary border-x border-b border-outline-variant overflow-hidden">
+      <div class="p-6 border-b border-outline-variant">
+        <h2 class="text-headline-sm font-sans text-on-surface">Configuración del Solver</h2>
+        <p class="text-body-sm text-on-surface-variant mt-1">
+          El solver CP-SAT encontrará la asignación óptima de clases, salones y horarios.
+        </p>
       </div>
-      <div class="card" style="margin:0; text-align:center;">
-        <div style="font-family:var(--mono); font-size:2rem; font-weight:800; color:var(--cyan); line-height:1;">
-          {{ resumen.asignaciones }}
+
+      <div class="p-6 space-y-6">
+        <!-- Tiempo máximo -->
+        <div class="max-w-xs">
+          <label class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider block mb-2">
+            Tiempo máximo de ejecución (segundos)
+          </label>
+          <div class="flex items-center gap-3">
+            <input
+              v-model.number="state.tiempoSegundos"
+              type="number" min="1" max="600"
+              class="w-32 bg-surface-container-lowest border border-outline-variant rounded-lg px-4 py-3
+                     text-headline-sm font-mono text-on-surface text-center
+                     focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50 transition-all"
+            />
+            <div class="space-y-1">
+              <p class="text-body-sm text-on-surface-variant">Recomendado: 10–60 segundos</p>
+              <p class="text-label-md font-mono text-outline">Más tiempo = mejor solución</p>
+            </div>
+          </div>
         </div>
-        <div style="font-size:.72rem; color:var(--t3); text-transform:uppercase; letter-spacing:.08em; font-family:var(--mono);">
-          Asignaciones
+
+        <!-- Presets -->
+        <div class="flex flex-wrap gap-2">
+          <span class="text-label-md font-mono text-on-surface-variant mr-2 self-center">Presets:</span>
+          <button
+            v-for="t in [10, 30, 60, 120, 240]" :key="t"
+            @click="state.tiempoSegundos = t"
+            :class="[
+              'text-label-md font-mono px-3 py-1.5 rounded-lg border transition-colors',
+              state.tiempoSegundos === t
+                ? 'bg-primary/10 text-primary border-primary/30'
+                : 'bg-surface-container-high text-on-surface-variant border-outline-variant hover:border-primary/30 hover:text-on-surface'
+            ]"
+          >{{ t }}s</button>
+        </div>
+
+        <!-- Validation warning -->
+        <div
+          v-if="!listo"
+          class="flex items-start gap-3 bg-error/10 border border-error/30 rounded-xl px-4 py-3"
+        >
+          <span class="material-symbols-outlined text-error text-[20px] flex-shrink-0 mt-0.5">warning</span>
+          <div>
+            <p class="text-body-sm text-error font-medium">Datos incompletos</p>
+            <ul class="text-label-md font-mono text-error/80 mt-1 space-y-0.5 list-disc list-inside">
+              <li v-if="!state.materias.length">Sin materias registradas</li>
+              <li v-else-if="state.materias.some(m => m.editing)">Hay materias sin guardar</li>
+              <li v-if="!state.profesores.length">Sin profesores registrados</li>
+              <li v-else-if="state.profesores.some(p => p.editing)">Hay profesores sin guardar</li>
+              <li v-else-if="state.profesores.some(p => !p.materiaIds?.length)">Hay profesores sin materia asignada</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="card">
-    <div class="card-title">Tiempo de ejecución</div>
-    <div style="max-width:420px">
-      <div class="fl">
-        <label class="lbl">Tiempo máximo (segundos) <span class="req">*</span></label>
-        <input v-model.number="state.tiempoSegundos" class="inp" type="number" min="1" placeholder="10" />
-        <span style="font-size:.73rem;color:var(--t3);margin-top:3px;">
-          Aquí solo guardamos el parámetro; la conexión al solver la puedes hacer después.
+    <!-- ─── Log de ejecución ─── -->
+    <div
+      v-if="logMessages.length || loading"
+      class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
+    >
+      <div class="px-4 py-3 border-b border-outline-variant bg-surface-container-low flex items-center gap-2">
+        <span class="material-symbols-outlined text-outline text-[16px]">terminal</span>
+        <span class="text-label-md font-mono text-on-surface-variant">LOG DE EJECUCIÓN</span>
+        <div v-if="loading" class="ml-auto flex items-center gap-2">
+          <span class="relative flex h-2.5 w-2.5">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+          </span>
+          <span class="text-label-md font-mono text-primary">Ejecutando...</span>
+        </div>
+      </div>
+      <div class="p-4 space-y-1.5 max-h-48 overflow-y-auto">
+        <div
+          v-for="(log, i) in logMessages" :key="i"
+          :class="[
+            'flex items-start gap-2 text-[11px] font-mono',
+            log.type === 'error'   ? 'text-error' :
+            log.type === 'success' ? 'text-primary' : 'text-on-surface-variant'
+          ]"
+        >
+          <span class="text-outline flex-shrink-0">{{ log.ts }}</span>
+          <span>{{ log.msg }}</span>
+        </div>
+        <div v-if="loading && !logMessages.length" class="text-[11px] font-mono text-on-surface-variant animate-pulse">
+          Inicializando...
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Bottom Actions ─── -->
+    <div class="flex justify-between items-center pt-6 border-t border-outline-variant">
+      <button
+        @click="$emit('prev')"
+        :disabled="loading"
+        class="text-label-md font-mono px-5 py-2.5 rounded-xl border border-outline-variant
+               text-on-surface-variant hover:bg-surface-container-high transition-colors
+               flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <span class="material-symbols-outlined text-[18px]">arrow_back</span>
+        Profesores
+      </button>
+
+      <button
+        @click="ejecutarAlgoritmo"
+        :disabled="loading || !listo"
+        :class="[
+          'text-label-md font-mono rounded-xl px-8 py-3 flex items-center gap-3 transition-all',
+          loading
+            ? 'bg-primary-container/50 text-on-surface-variant cursor-not-allowed'
+            : listo
+              ? 'bg-primary text-background hover:bg-primary-fixed shadow-[0_0_25px_rgba(78,222,163,0.3)]'
+              : 'bg-surface-container-high text-on-surface-variant border border-outline-variant cursor-not-allowed'
+        ]"
+      >
+        <span v-if="loading" class="relative flex h-4 w-4">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-4 w-4 bg-primary/50"></span>
         </span>
-      </div>
+        <span v-else class="material-symbols-outlined text-[20px]">play_arrow</span>
+        <span>{{ loading ? 'Ejecutando Algoritmo...' : 'Ejecutar Algoritmo y Ver Horario' }}</span>
+      </button>
     </div>
-  </div>
 
-  <div class="nav-row">
-    <button class="btn btn-ghost" @click="$emit('prev')">Volver</button>
-    <button class="btn btn-primary" :disabled="loading" @click="ejecutarAlgoritmo">
-      <span v-if="loading" class="spinner"></span>
-      {{ loading ? 'Ejecutando...' : 'Ejecutar algoritmo y ver calendario' }}
-    </button>
   </div>
 </template>
-
-<style scoped>
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-  margin-right: 8px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-button:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-</style>
-
