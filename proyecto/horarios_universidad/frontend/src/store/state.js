@@ -9,12 +9,13 @@ function nextId(key) {
 }
 
 const defaults = {
-  step: 1,
+  step: 0,
   nextMatId: 1,
   nextProfId: 1,
   materias: [],
   profesores: [],
   tiempoSegundos: 10,
+  lastRun: null, // { status, message, timestamp, elapsed }
   calendario: {
     dias: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'],
     // por defecto coincide con DEFAULT_CONFIG.bloques_por_dia (11) empezando a las 06:00
@@ -40,6 +41,7 @@ watch(
       materias: state.materias,
       profesores: state.profesores,
       tiempoSegundos: state.tiempoSegundos,
+      lastRun: state.lastRun,
       calendario: state.calendario,
     })
   },
@@ -139,6 +141,10 @@ export function moveEvento(eventoId, dayIndex, hourIndex) {
 
 export function removeEvento(eventoId) {
   state.calendario.eventos = state.calendario.eventos.filter((e) => e.id !== eventoId)
+}
+
+export function setLastRun(result) {
+  state.lastRun = result
 }
 
 export function generateDemoSchedule() {
