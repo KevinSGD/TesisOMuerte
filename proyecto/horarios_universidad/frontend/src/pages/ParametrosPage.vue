@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { state, resetCalendar, setEventos, setLastRun } from '../store/state'
-import { runScheduler, saveData } from '../services/api'
+import { getDbHealth, runScheduler, saveData } from '../services/api'
 
 const emit = defineEmits(['toast', 'prev', 'next'])
 
@@ -81,24 +81,37 @@ async function ejecutarAlgoritmo() {
   addLog('Iniciando proceso de generación de horarios...', 'info')
 
   try {
-    addLog('Guardando datos en la base de datos...', 'info')
-    emit('toast', 'Guardando datos...', 'info')
+    let dbOk = false
+    try {
+      const db = await getDbHealth()
+      dbOk = !!db?.ok
+    } catch {
+      dbOk = false
+    }
 
-    const materiaIdToNombre = Object.fromEntries(state.materias.map(m => [m.id, m.nombre]))
-    await saveData({
-      materias: state.materias.map(m => ({
-        nombre: m.nombre, creditos: m.creditos, grupos: m.grupos, categoria: m.categoria,
-      })),
-      profesores: state.profesores.map(p => ({
-        nombre: p.nombre,
-        codigo: p.profesorId,
-        // Send all assigned materias (by name)
-        materia_ids: (p.materiaIds || []).map(id => materiaIdToNombre[id] || id),
-        materia_id: materiaIdToNombre[(p.materiaIds || [])[0]] || null,
-      })),
-      clear_existing: true,
-    })
-    addLog('✓ Datos guardados exitosamente', 'success')
+    if (dbOk) {
+      addLog('Guardando datos en la base de datos...', 'info')
+      emit('toast', 'Guardando datos...', 'info')
+
+      const materiaIdToNombre = Object.fromEntries(state.materias.map(m => [m.id, m.nombre]))
+      await saveData({
+        materias: state.materias.map(m => ({
+          nombre: m.nombre, creditos: m.creditos, grupos: m.grupos, categoria: m.categoria,
+        })),
+        profesores: state.profesores.map(p => ({
+          nombre: p.nombre,
+          codigo: p.profesorId,
+          // Send all assigned materias (by name)
+          materia_ids: (p.materiaIds || []).map(id => materiaIdToNombre[id] || id),
+          materia_id: materiaIdToNombre[(p.materiaIds || [])[0]] || null,
+        })),
+        clear_existing: true,
+      })
+      addLog('✓ Datos guardados exitosamente', 'success')
+    } else {
+      addLog('DB no disponible; se omite guardado y se continua en modo local.', 'info')
+      emit('toast', 'DB no disponible: se omite guardado.', 'info')
+    }
 
     addLog(`Ejecutando solver CP-SAT (timeout: ${state.tiempoSegundos}s)...`, 'info')
     emit('toast', 'Ejecutando algoritmo...', 'info')
