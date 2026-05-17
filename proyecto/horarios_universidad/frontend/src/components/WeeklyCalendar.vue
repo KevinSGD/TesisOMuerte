@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { PALETTE_HEX } from '../lib/colors.js'
 
 const props = defineProps({
   data: { type: Array, default: () => [] },
@@ -12,11 +13,8 @@ const HORAS = [
   '12:00–13:00', '13:00–14:00', '14:00–15:00', '15:00–16:00', '16:00–17:00', '17:00–18:00',
 ]
 
-const PALETTE = [
-  '#3b5bdb', '#1098ad', '#2f9e44', '#e67700', '#c2255c',
-  '#6741d9', '#0c8599', '#5c940d', '#d9480f', '#862e9c',
-  '#1864ab', '#087f5b', '#a61e4d', '#343a40', '#495057',
-]
+// Use shared WCAG-compliant palette (PALETTE_HEX from colors.js)
+const PALETTE = PALETTE_HEX
 
 const materiaColorMap = computed(() => {
   const map = {}

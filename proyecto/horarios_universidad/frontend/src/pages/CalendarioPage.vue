@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { moveEvento, removeEvento, resetCalendar, setSalonFilter, state, upsertEvento } from '../store/state'
 import { verifySchedule } from '../services/api'
+import { colorForIndex } from '../lib/colors.js'
 
 const emit = defineEmits(['toast', 'prev'])
 
@@ -94,16 +95,10 @@ function delModal() {
   closeModal()
 }
 
-// ─── Color coding (cyclic by materia) ───
-const COLORS = [
-  { bg: 'bg-primary/15',   border: 'border-primary/60',   text: 'text-primary' },
-  { bg: 'bg-secondary/15', border: 'border-secondary/60', text: 'text-secondary' },
-  { bg: 'bg-tertiary/15',  border: 'border-tertiary/60',  text: 'text-tertiary' },
-  { bg: 'bg-primary-fixed/10', border: 'border-primary-fixed/60', text: 'text-primary-fixed' },
-]
+// ─── Color coding — shared palette from lib/colors.js ───
 function colorFor(materiaId) {
   const idx = state.materias.findIndex(m => m.id === materiaId)
-  return COLORS[Math.abs(idx) % COLORS.length] || COLORS[0]
+  return colorForIndex(idx)
 }
 
 // ─── Stats ───
@@ -342,17 +337,19 @@ async function verificar() {
                 :draggable="editMode"
                 @dragstart="ev => onDragStart(ev, e)"
                 @click="openModal(e)"
+                :style="colorFor(e.materiaId).bgStyle"
                 :class="[
-                  'flex-1 rounded p-1 flex flex-col justify-between cursor-pointer transition-opacity min-h-[1.5rem]',
+                  'flex-1 rounded p-1 flex flex-col justify-between transition-opacity min-h-[1.5rem]',
                   'border',
-                  colorFor(e.materiaId).bg,
-                  colorFor(e.materiaId).border,
                   'hover:opacity-80',
                   editMode ? 'cursor-grab' : 'cursor-pointer'
                 ]"
                 :title="editMode ? 'Arrastra para mover · clic para editar' : 'Clic para editar'"
               >
-                <span :class="['text-[9px] font-mono font-bold truncate leading-tight', colorFor(e.materiaId).text]">
+                <span
+                  class="text-[9px] font-mono font-bold truncate leading-tight"
+                  :style="colorFor(e.materiaId).textStyle"
+                >
                   {{ materiasById[e.materiaId]?.nombre || 'Materia' }}
                   <span class="opacity-60">G{{ e.grupo }}</span>
                 </span>
@@ -376,7 +373,10 @@ async function verificar() {
     >
       <span class="text-label-md font-mono text-on-surface-variant">Materias:</span>
       <div v-for="m in state.materias.slice(0, 8)" :key="m.id" class="flex items-center gap-1.5">
-        <div :class="['w-2.5 h-2.5 rounded-sm border', colorFor(m.id).border, colorFor(m.id).bg]"></div>
+        <div
+          class="w-2.5 h-2.5 rounded-sm border"
+          :style="colorFor(m.id).bgStyle"
+        ></div>
         <span class="text-[10px] font-mono text-on-surface-variant truncate max-w-[8rem]">{{ m.nombre }}</span>
       </div>
       <span v-if="state.materias.length > 8" class="text-[10px] font-mono text-outline">
