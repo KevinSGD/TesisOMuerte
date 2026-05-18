@@ -8,5 +8,5 @@ DEFAULT_CONFIG = {
     "num_salones_comunes": 8,
     "num_salones_pc": 12,
     "k_candidatos": 6,
-    "max_time_seconds": 240,
+    "max_time_seconds": 50,
 }
