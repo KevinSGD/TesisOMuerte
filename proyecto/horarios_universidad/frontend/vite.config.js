@@ -12,6 +12,8 @@ export default defineConfig({
         changeOrigin: true,
         timeout: 300000,
         proxyTimeout: 300000,
+        timeout: 300000,
+        proxyTimeout: 300000,
       },
     },
   },
