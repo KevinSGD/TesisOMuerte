@@ -8,7 +8,7 @@ export default defineConfig({
     proxy: {
       // Django dev server
       '^/api/': {
-        target: 'http://127.0.0.1:8000',
+        target: 'https://tesisomuerte-production-6d83.up.railway.app',
         changeOrigin: true,
       },
     },
