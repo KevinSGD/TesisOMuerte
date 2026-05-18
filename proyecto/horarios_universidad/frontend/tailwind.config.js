@@ -5,37 +5,38 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Primary: teal-green (softer, less neon)
+        // Primary: teal-green
         'primary':                   '#35c98a',
         'primary-container':         '#1a9e6b',
         'primary-fixed':             '#52e0a2',
         'primary-fixed-dim':         '#35c98a',
         'on-primary':                '#002918',
-        'on-primary-container':      '#003320',
+        'on-primary-container':      '#d0ffe4',
         'on-primary-fixed':          '#001810',
         'on-primary-fixed-variant':  '#004030',
-        // Secondary: steel blue (replaces neon cyan)
+        // Secondary: steel blue
         'secondary':                 '#4ab8d9',
         'secondary-container':       '#2196b5',
         'secondary-fixed':           '#8dd6ef',
         'secondary-fixed-dim':       '#4ab8d9',
         'on-secondary':              '#002d38',
-        'on-secondary-container':    '#003845',
+        'on-secondary-container':    '#c8f0ff',
         'on-secondary-fixed':        '#001820',
         'on-secondary-fixed-variant':'#004050',
-        // Tertiary: warm amber (replaces coral/red)
+        // Tertiary: warm amber
         'tertiary':                  '#e8a44a',
         'tertiary-container':        '#c07f28',
         'tertiary-fixed':            '#f5c97a',
         'tertiary-fixed-dim':        '#e8a44a',
         'on-tertiary':               '#3c2500',
-        'on-tertiary-container':     '#4a2e00',
+        'on-tertiary-container':     '#fff0d9',
         'on-tertiary-fixed':         '#241500',
         'on-tertiary-fixed-variant': '#5a3800',
+        // Backgrounds & surfaces — surface ≠ background for elevation clarity
         'background':                '#0b1326',
         'on-background':             '#dae2fd',
-        'surface':                   '#0b1326',
-        'surface-dim':               '#0b1326',
+        'surface':                   '#0f1829',
+        'surface-dim':               '#090f1c',
         'surface-bright':            '#31394d',
         'surface-container-lowest':  '#060e20',
         'surface-container-low':     '#131b2e',
@@ -58,10 +59,13 @@ export default {
       },
       borderRadius: {
         'DEFAULT': '0.125rem',
+        'sm':      '0.125rem',
+        'md':      '0.25rem',
         'lg':      '0.25rem',
         'xl':      '0.5rem',
         '2xl':     '0.75rem',
-        'full':    '0.75rem',
+        // BUG FIX: was '0.75rem', must be 9999px for circular elements
+        'full':    '9999px',
       },
       spacing: {
         'unit':            '4px',
@@ -88,7 +92,8 @@ export default {
         'headline-sm':       ['20px', { lineHeight: '1.4', fontWeight: '600' }],
         'body-md':           ['16px', { lineHeight: '1.5', fontWeight: '400' }],
         'body-sm':           ['14px', { lineHeight: '1.5', fontWeight: '400' }],
-        'label-md':          ['12px', { lineHeight: '1', letterSpacing: '0.05em', fontWeight: '500' }],
+        // RAISED from 12px → 14px for readability in dark interfaces (WCAG + UX)
+        'label-md':          ['14px', { lineHeight: '1.2', letterSpacing: '0.04em', fontWeight: '500' }],
       },
     },
   },

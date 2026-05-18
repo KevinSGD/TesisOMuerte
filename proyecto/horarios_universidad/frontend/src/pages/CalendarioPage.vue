@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { moveEvento, removeEvento, resetCalendar, setSalonFilter, state, upsertEvento } from '../store/state'
 import { verifySchedule } from '../services/api'
+import { tailwindColorFor } from '../composables/useEventColors'
 
 const emit = defineEmits(['toast', 'prev'])
 
@@ -90,16 +91,10 @@ function delModal() {
   closeModal()
 }
 
-// ─── Color coding (cyclic by materia) ───
-const COLORS = [
-  { bg: 'bg-primary/15',   border: 'border-primary/60',   text: 'text-primary' },
-  { bg: 'bg-secondary/15', border: 'border-secondary/60', text: 'text-secondary' },
-  { bg: 'bg-tertiary/15',  border: 'border-tertiary/60',  text: 'text-tertiary' },
-  { bg: 'bg-primary-fixed/10', border: 'border-primary-fixed/60', text: 'text-primary-fixed' },
-]
+// ─── Color coding — delegates to shared palette (single source of truth) ───
 function colorFor(materiaId) {
   const idx = state.materias.findIndex(m => m.id === materiaId)
-  return COLORS[Math.abs(idx) % COLORS.length] || COLORS[0]
+  return tailwindColorFor(idx)
 }
 
 // ─── Stats ───
