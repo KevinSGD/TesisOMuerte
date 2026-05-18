@@ -8,6 +8,7 @@ def solve(cfg, data):
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = cfg["max_time_seconds"]
+    solver.parameters.num_search_workers = 1
 
     t0 = time.time()
     status = solver.Solve(model)
