@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { addMateria, ensureMateriasCount, removeMateria, state } from '../store/state'
 
 const emit = defineEmits(['toast', 'next'])
@@ -7,6 +7,31 @@ const emit = defineEmits(['toast', 'next'])
 const nMaterias = ref(state.materias.length || 5)
 
 const CATEGORIAS = ['Software', 'Humanidades', 'Ciencias Básicas']
+
+// ── Computed auto-grupos resolution ──────────────────────────────────────
+// When a materia has autoGrupos=true, derive grupos in real time
+function computedGrupos(m) {
+  if (!m.autoGrupos) return m.grupos
+  const dem = Number(m.demanda)      || 0
+  const cap = Number(m.capacidadGrupo) || 30
+  if (cap <= 0) return 1
+  return Math.max(1, Math.ceil(dem / cap))
+}
+
+// Keep grupos field in sync when autoGrupos is active
+watch(
+  () => state.materias.map(m => ({
+    auto: m.autoGrupos, dem: m.demanda, cap: m.capacidadGrupo
+  })),
+  () => {
+    for (const m of state.materias) {
+      if (m.autoGrupos) {
+        m.grupos = computedGrupos(m)
+      }
+    }
+  },
+  { deep: true },
+)
 
 const materiasValidas = computed(() =>
   state.materias.length > 0 &&
@@ -22,10 +47,10 @@ function generar() {
 }
 
 function guardar(m) {
-  if (!(m.nombre || '').trim()) return emit('toast', 'El nombre es requerido.', 'error')
+  if (!(m.nombre || '').trim())           return emit('toast', 'El nombre es requerido.', 'error')
   if (!Number(m.creditos) || Number(m.creditos) < 1) return emit('toast', 'Créditos inválidos (≥1).', 'error')
   if (!Number(m.grupos)   || Number(m.grupos)   < 1) return emit('toast', 'Grupos inválidos (≥1).', 'error')
-  if (!(m.categoria || '').trim()) return emit('toast', 'Selecciona una categoría.', 'error')
+  if (!(m.categoria || '').trim())         return emit('toast', 'Selecciona una categoría.', 'error')
   m.editing = false
 }
 
@@ -47,6 +72,13 @@ function categoriaBadgeClass(cat) {
   if (cat === 'Humanidades')    return 'bg-secondary/10 text-secondary border-secondary/20'
   return 'bg-tertiary/10 text-tertiary border-tertiary/20'
 }
+
+function toggleAutoGrupos(m) {
+  m.autoGrupos = !m.autoGrupos
+  if (m.autoGrupos) {
+    m.grupos = computedGrupos(m)
+  }
+}
 </script>
 
 <template>
@@ -56,18 +88,23 @@ function categoriaBadgeClass(cat) {
     <header class="flex flex-col gap-6">
       <div class="flex items-start justify-between flex-wrap gap-4">
         <div>
+          <!-- FIX: was "Configuración de Parámetros" — wrong title -->
           <h1 class="text-display-lg-mobile md:text-display-lg font-sans font-bold text-primary">
-            Configuración de Parámetros
+            Configuración de Materias
           </h1>
           <p class="text-body-md text-on-surface-variant mt-2">
-            Defina los datos base para la generación de horarios.
+            Defina el catálogo de materias, créditos y grupos a programar.
           </p>
         </div>
         <!-- Generar rápido -->
         <div class="flex items-center gap-3 flex-wrap">
           <div class="flex items-center gap-2">
-            <label class="text-label-md font-mono text-on-surface-variant whitespace-nowrap">Cant. materias:</label>
+            <!-- FIX: label linked via for/id for a11y -->
+            <label for="cant-materias" class="text-label-md font-mono text-on-surface-variant whitespace-nowrap">
+              Cant. materias:
+            </label>
             <input
+              id="cant-materias"
               v-model.number="nMaterias"
               type="number" min="1" max="200"
               class="w-20 bg-surface-container-lowest border border-outline-variant rounded-lg
@@ -94,14 +131,12 @@ function categoriaBadgeClass(cat) {
           :style="{ width: materiasValidas ? '50%' : '5%' }"
         ></div>
         <div class="flex justify-between w-full z-10 relative">
-          <!-- Step 1: Materias (activo) -->
           <div class="flex flex-col items-center gap-2 bg-background px-4">
             <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center border-2 border-background">
-              <span class="text-label-md font-mono text-on-primary-fixed font-bold">1</span>
+              <span class="text-label-md font-mono text-on-primary font-bold">1</span>
             </div>
             <span class="text-label-md font-mono text-primary">Materias</span>
           </div>
-          <!-- Step 2: Profesores (bloqueado hasta completar) -->
           <div class="flex flex-col items-center gap-2 bg-background px-4">
             <div :class="[
               'w-8 h-8 rounded-full border flex items-center justify-center',
@@ -111,7 +146,6 @@ function categoriaBadgeClass(cat) {
             </div>
             <span class="text-label-md font-mono text-on-surface-variant">Docentes</span>
           </div>
-          <!-- Step 3: Parámetros -->
           <div class="flex flex-col items-center gap-2 bg-background px-4">
             <div class="w-8 h-8 rounded-full bg-surface-container-high border border-outline-variant flex items-center justify-center">
               <span class="text-label-md font-mono text-on-surface-variant">3</span>
@@ -133,12 +167,12 @@ function categoriaBadgeClass(cat) {
           </p>
         </div>
         <div class="flex items-center gap-3">
-          <span class="text-label-md font-mono text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20">
+          <span class="text-label-md font-mono text-primary bg-primary/10 px-2 py-1 rounded-full border border-primary/20">
             {{ state.materias.length }} materias
           </span>
           <span
             v-if="materiasValidas"
-            class="text-label-md font-mono text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20 flex items-center gap-1"
+            class="text-label-md font-mono text-primary bg-primary/10 px-2 py-1 rounded-full border border-primary/20 flex items-center gap-1"
           >
             <span class="material-symbols-outlined text-[14px]">check_circle</span> Completo
           </span>
@@ -147,20 +181,24 @@ function categoriaBadgeClass(cat) {
 
       <!-- Table -->
       <div class="w-full overflow-x-auto">
-        <table class="w-full text-left border-collapse min-w-[640px]">
+        <table class="w-full text-left border-collapse min-w-[820px]">
           <thead>
             <tr class="bg-surface-container-low border-b border-outline-variant">
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4 w-8">#</th>
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4">Nombre de Materia</th>
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4 w-32 text-center">Créditos</th>
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4 w-32 text-center">Grupos</th>
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4 w-44">Categoría</th>
-              <th class="text-label-md font-mono text-on-surface-variant px-6 py-4 text-right w-36">Acciones</th>
+              <th scope="col" class="text-label-md font-mono text-on-surface-variant px-4 py-4 w-8">#</th>
+              <th scope="col" class="text-label-md font-mono text-on-surface-variant px-4 py-4">Nombre de Materia</th>
+              <th scope="col" class="text-label-md font-mono text-on-surface-variant px-4 py-4 w-24 text-center">Créditos</th>
+              <th scope="col" class="text-label-md font-mono text-on-surface-variant px-4 py-4 w-48 text-center">
+                Grupos
+                <span class="text-[11px] text-outline normal-case ml-1">(+ auto)</span>
+              </th>
+              <th scope="col" class="text-label-md font-mono text-on-surface-variant px-4 py-4 w-36">Demanda</th>
+              <th scope="col" class="text-label-md font-mono text-on-surface-variant px-4 py-4 w-44">Categoría</th>
+              <th scope="col" class="text-label-md font-mono text-on-surface-variant px-4 py-4 text-right w-32">Acciones</th>
             </tr>
           </thead>
           <tbody v-if="!state.materias.length">
             <tr>
-              <td colspan="6" class="px-6 py-12 text-center text-on-surface-variant text-body-sm">
+              <td colspan="7" class="px-6 py-12 text-center text-on-surface-variant text-body-sm">
                 <span class="material-symbols-outlined text-[32px] block mb-2 opacity-30">book</span>
                 Sin materias. Ingresa la cantidad arriba y haz clic en "Generar apartados".
               </td>
@@ -173,70 +211,169 @@ function categoriaBadgeClass(cat) {
               class="border-b border-outline-variant hover:bg-surface-container-low/60 transition-colors"
             >
               <!-- Index -->
-              <td class="px-6 py-3 text-label-md font-mono text-on-surface-variant">
+              <td class="px-4 py-3 text-label-md font-mono text-on-surface-variant">
                 {{ String(i + 1).padStart(2, '0') }}
               </td>
+
               <!-- Nombre -->
-              <td class="px-6 py-3">
-                <input
-                  v-if="m.editing"
-                  v-model="m.nombre"
-                  type="text"
-                  placeholder="Ej. Álgebra Lineal"
-                  class="w-full bg-surface-container-lowest border border-outline-variant rounded px-3 py-2
-                         text-body-sm text-on-surface placeholder:text-on-surface-variant/40
-                         focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50 transition-all"
-                />
+              <td class="px-4 py-3">
+                <div v-if="m.editing">
+                  <!-- FIX: label+id pairing for a11y -->
+                  <label :for="`nombre-mat-${m.id}`" class="sr-only">Nombre de la materia {{ i + 1 }}</label>
+                  <input
+                    :id="`nombre-mat-${m.id}`"
+                    v-model="m.nombre"
+                    type="text"
+                    placeholder="Ej. Álgebra Lineal"
+                    class="w-full bg-surface-container-lowest border border-outline-variant rounded px-3 py-2
+                           text-body-sm text-on-surface placeholder:text-on-surface-variant/40
+                           focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50 transition-all"
+                  />
+                </div>
                 <span v-else class="text-body-sm text-on-surface font-medium">{{ m.nombre }}</span>
               </td>
+
               <!-- Créditos -->
-              <td class="px-6 py-3 text-center">
-                <input
-                  v-if="m.editing"
-                  v-model.number="m.creditos"
-                  type="number" min="1" max="40"
-                  class="w-20 bg-surface-container-lowest border border-outline-variant rounded px-3 py-2
-                         text-label-md font-mono text-on-surface text-center
-                         focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
-                />
+              <td class="px-4 py-3 text-center">
+                <div v-if="m.editing">
+                  <label :for="`creditos-mat-${m.id}`" class="sr-only">Créditos materia {{ i + 1 }}</label>
+                  <input
+                    :id="`creditos-mat-${m.id}`"
+                    v-model.number="m.creditos"
+                    type="number" min="1" max="40"
+                    class="w-20 bg-surface-container-lowest border border-outline-variant rounded px-3 py-2
+                           text-label-md font-mono text-on-surface text-center
+                           focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+                  />
+                </div>
                 <span v-else class="text-label-md font-mono text-primary">{{ m.creditos }}</span>
               </td>
-              <!-- Grupos -->
-              <td class="px-6 py-3 text-center">
-                <input
-                  v-if="m.editing"
-                  v-model.number="m.grupos"
-                  type="number" min="1" max="60"
-                  class="w-20 bg-surface-container-lowest border border-outline-variant rounded px-3 py-2
-                         text-label-md font-mono text-on-surface text-center
-                         focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
-                />
-                <span v-else class="text-label-md font-mono text-secondary">{{ m.grupos }}</span>
+
+              <!-- Grupos + Auto toggle -->
+              <td class="px-4 py-3 text-center">
+                <div v-if="m.editing" class="flex flex-col items-center gap-2">
+                  <!-- Number input — disabled when autoGrupos is on -->
+                  <div class="flex items-center gap-2">
+                    <label :for="`grupos-mat-${m.id}`" class="sr-only">Grupos materia {{ i + 1 }}</label>
+                    <input
+                      :id="`grupos-mat-${m.id}`"
+                      v-model.number="m.grupos"
+                      type="number" min="1" max="60"
+                      :disabled="m.autoGrupos"
+                      :class="[
+                        'w-16 border rounded px-2 py-1.5 text-label-md font-mono text-center transition-all',
+                        m.autoGrupos
+                          ? 'bg-surface-container-highest border-outline-variant text-on-surface-variant opacity-50 cursor-not-allowed'
+                          : 'bg-surface-container-lowest border-outline-variant text-on-surface focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50'
+                      ]"
+                    />
+                    <!-- Auto toggle button -->
+                    <button
+                      type="button"
+                      @click="toggleAutoGrupos(m)"
+                      :class="[
+                        'flex items-center gap-1 text-[11px] font-mono px-2 py-1 rounded-full border transition-all',
+                        m.autoGrupos
+                          ? 'bg-secondary/15 text-secondary border-secondary/30'
+                          : 'bg-surface-container-high text-on-surface-variant border-outline-variant hover:border-secondary/40'
+                      ]"
+                      :title="m.autoGrupos ? 'Auto-cálculo activo — clic para desactivar' : 'Activar auto-cálculo de grupos'"
+                    >
+                      <span class="material-symbols-outlined text-[12px]">{{ m.autoGrupos ? 'auto_awesome' : 'calculate' }}</span>
+                      Auto
+                    </button>
+                  </div>
+                  <!-- Sub-fields shown when auto is active -->
+                  <div v-if="m.autoGrupos" class="w-full flex flex-col gap-1 bg-secondary/5 border border-secondary/20 rounded-lg p-2">
+                    <div class="flex items-center gap-1.5">
+                      <label :for="`demanda-mat-${m.id}`" class="text-[11px] font-mono text-on-surface-variant w-16 text-right flex-shrink-0">Demanda:</label>
+                      <input
+                        :id="`demanda-mat-${m.id}`"
+                        v-model.number="m.demanda"
+                        type="number" min="0" max="9999"
+                        placeholder="0"
+                        class="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1
+                               text-[12px] font-mono text-on-surface text-center
+                               focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/30"
+                      />
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <label :for="`cap-mat-${m.id}`" class="text-[11px] font-mono text-on-surface-variant w-16 text-right flex-shrink-0">Cap/grupo:</label>
+                      <input
+                        :id="`cap-mat-${m.id}`"
+                        v-model.number="m.capacidadGrupo"
+                        type="number" min="1" max="500"
+                        placeholder="30"
+                        class="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1
+                               text-[12px] font-mono text-on-surface text-center
+                               focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/30"
+                      />
+                    </div>
+                    <p class="text-[11px] font-mono text-secondary text-center mt-0.5">
+                      → {{ computedGrupos(m) }} grupo{{ computedGrupos(m) !== 1 ? 's' : '' }}
+                    </p>
+                  </div>
+                </div>
+                <div v-else class="flex items-center justify-center gap-1.5">
+                  <span class="text-label-md font-mono text-secondary">{{ m.grupos }}</span>
+                  <span
+                    v-if="m.autoGrupos"
+                    class="text-[11px] font-mono text-secondary/70 border border-secondary/20 rounded-full px-1.5"
+                    title="Grupos calculados automáticamente"
+                  >auto</span>
+                </div>
               </td>
+
+              <!-- Demanda (summary column — read-only when not in auto mode) -->
+              <td class="px-4 py-3">
+                <div v-if="m.editing && !m.autoGrupos" class="flex flex-col gap-1">
+                  <label :for="`demanda-solo-${m.id}`" class="text-[11px] font-mono text-on-surface-variant">Est. esperados</label>
+                  <input
+                    :id="`demanda-solo-${m.id}`"
+                    v-model.number="m.demanda"
+                    type="number" min="0" max="9999"
+                    placeholder="0"
+                    class="w-24 bg-surface-container-lowest border border-outline-variant rounded px-2 py-1.5
+                           text-label-md font-mono text-on-surface text-center
+                           focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+                  />
+                </div>
+                <div v-else>
+                  <span class="text-label-md font-mono text-on-surface-variant">
+                    {{ m.demanda ? m.demanda + ' est.' : '—' }}
+                  </span>
+                </div>
+              </td>
+
               <!-- Categoría -->
-              <td class="px-6 py-3">
-                <select
-                  v-if="m.editing"
-                  v-model="m.categoria"
-                  class="w-full bg-surface-container-lowest border border-outline-variant rounded px-3 py-2
-                         text-body-sm text-on-surface
-                         focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
-                >
-                  <option v-for="cat in CATEGORIAS" :key="cat" :value="cat">{{ cat }}</option>
-                </select>
+              <td class="px-4 py-3">
+                <div v-if="m.editing">
+                  <label :for="`cat-mat-${m.id}`" class="sr-only">Categoría materia {{ i + 1 }}</label>
+                  <select
+                    :id="`cat-mat-${m.id}`"
+                    v-model="m.categoria"
+                    class="w-full bg-surface-container-lowest border border-outline-variant rounded px-3 py-2
+                           text-body-sm text-on-surface
+                           focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/50"
+                  >
+                    <option v-for="cat in CATEGORIAS" :key="cat" :value="cat">{{ cat }}</option>
+                  </select>
+                </div>
                 <span
                   v-else
-                  :class="['inline-flex items-center text-label-md font-mono px-2 py-1 rounded border', categoriaBadgeClass(m.categoria)]"
+                  :class="['inline-flex items-center text-label-md font-mono px-2 py-1 rounded-full border', categoriaBadgeClass(m.categoria)]"
                 >{{ m.categoria }}</span>
               </td>
+
               <!-- Actions -->
-              <td class="px-6 py-3 text-right">
+              <td class="px-4 py-3 text-right">
                 <div class="flex justify-end gap-1">
                   <button
                     v-if="m.editing"
                     @click="guardar(m)"
                     class="text-label-md font-mono bg-primary/10 text-primary hover:bg-primary hover:text-on-primary
-                           border border-primary/30 px-3 py-1.5 rounded transition-colors flex items-center gap-1"
+                           border border-primary/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                    :aria-label="`Guardar materia ${m.nombre || i + 1}`"
                   >
                     <span class="material-symbols-outlined text-[16px]">save</span> Guardar
                   </button>
@@ -244,6 +381,7 @@ function categoriaBadgeClass(cat) {
                     v-else
                     @click="editar(m)"
                     class="p-2 text-on-surface-variant hover:text-secondary hover:bg-secondary/10 rounded-lg transition-colors"
+                    :aria-label="`Editar ${m.nombre}`"
                     title="Editar"
                   >
                     <span class="material-symbols-outlined text-[20px]">edit</span>
@@ -251,6 +389,7 @@ function categoriaBadgeClass(cat) {
                   <button
                     @click="eliminar(m.id)"
                     class="p-2 text-on-surface-variant hover:text-error hover:bg-error/10 rounded-lg transition-colors"
+                    :aria-label="`Eliminar ${m.nombre}`"
                     title="Eliminar"
                   >
                     <span class="material-symbols-outlined text-[20px]">delete</span>
@@ -267,7 +406,7 @@ function categoriaBadgeClass(cat) {
         <button
           @click="addMateria"
           class="text-label-md font-mono text-primary flex items-center gap-2
-                 hover:bg-surface-container-high px-3 py-2 rounded transition-colors"
+                 hover:bg-surface-container-high px-3 py-2 rounded-lg transition-colors"
         >
           <span class="material-symbols-outlined text-[18px]">add</span>
           Añadir Materia
@@ -275,10 +414,11 @@ function categoriaBadgeClass(cat) {
       </div>
     </section>
 
-    <!-- ─── Paso 2 preview (bloqueado) ─── -->
+    <!-- ─── Paso 2 preview (locked) ─── -->
     <section
       class="w-full bg-surface-container-lowest rounded-xl border border-outline-variant
              flex flex-col overflow-hidden opacity-50 pointer-events-none"
+      aria-hidden="true"
     >
       <div class="p-6 border-b border-outline-variant">
         <h2 class="text-headline-sm font-sans text-on-surface">Paso 2: Docentes</h2>
@@ -302,7 +442,7 @@ function categoriaBadgeClass(cat) {
         :class="[
           'text-label-md font-mono rounded-xl px-6 py-3 flex items-center gap-2 transition-colors',
           materiasValidas
-            ? 'bg-primary-container text-on-primary-container hover:bg-primary shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+            ? 'bg-primary text-on-primary hover:bg-primary-fixed shadow-[var(--glow-primary)]'
             : 'bg-surface-container-high text-on-surface-variant border border-outline-variant cursor-not-allowed'
         ]"
       >

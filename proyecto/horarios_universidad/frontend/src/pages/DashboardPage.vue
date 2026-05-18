@@ -1,18 +1,14 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { setSalonFilter, state } from '../store/state'
-import { getApiHealth, getDbHealth } from '../services/api'
+import { useHealthCheck } from '../composables/useHealthCheck'
 
 const emit = defineEmits(['toast', 'goto'])
 
-const backendOk = ref(null)
-const dbOk      = ref(null)
-const search    = ref('')
-
-onMounted(async () => {
-  try { const r = await getApiHealth(); backendOk.value = !!r.ok } catch { backendOk.value = false }
-  try { const r = await getDbHealth();  dbOk.value  = !!r.ok } catch { dbOk.value  = false }
-})
+// Shared composable: same logic as App.vue, avoids duplicating the inline fetch code.
+// Both instances check health independently on mount (lightweight endpoint).
+const { backendOk, dbOk } = useHealthCheck()
+const search = ref('')
 
 const hasEvents = computed(() => state.calendario.eventos.length > 0)
 const hasData   = computed(() => state.materias.length > 0 || state.profesores.length > 0)
@@ -124,15 +120,19 @@ function formatTS(ts) {
           <span class="text-label-md font-mono tracking-wide">Comenzar Configuración</span>
         </button>
       </div>
-      <!-- Status dots -->
-      <div class="mt-10 flex items-center gap-4">
+      <!-- Status indicators — shape + color (not color alone) -->
+      <div class="mt-10 flex items-center gap-4" role="status" aria-label="Estado de conexión">
         <div class="flex items-center gap-1.5">
-          <span :class="['w-2 h-2 rounded-full', backendOk ? 'bg-primary shadow-[0_0_6px_#4edea3]' : 'bg-error']"></span>
-          <span class="text-[11px] font-mono text-outline">{{ backendOk ? 'API activa' : 'API offline' }}</span>
+          <span
+            :class="['material-symbols-outlined text-[14px]', backendOk ? 'text-primary' : backendOk === false ? 'text-error' : 'text-outline']"
+          >{{ backendOk ? 'check_circle' : backendOk === false ? 'cancel' : 'pending' }}</span>
+          <span class="text-label-md font-mono text-outline">{{ backendOk ? 'API activa' : backendOk === false ? 'API offline' : 'Verificando...' }}</span>
         </div>
         <div class="flex items-center gap-1.5">
-          <span :class="['w-2 h-2 rounded-full', dbOk ? 'bg-secondary' : 'bg-outline']"></span>
-          <span class="text-[11px] font-mono text-outline">{{ dbOk ? 'DB conectada' : 'DB sin configurar' }}</span>
+          <span
+            :class="['material-symbols-outlined text-[14px]', dbOk ? 'text-secondary' : dbOk === false ? 'text-error' : 'text-outline']"
+          >{{ dbOk ? 'check_circle' : dbOk === false ? 'cancel' : 'pending' }}</span>
+          <span class="text-label-md font-mono text-outline">{{ dbOk ? 'DB conectada' : dbOk === false ? 'DB offline' : 'Verificando...' }}</span>
         </div>
       </div>
     </div>

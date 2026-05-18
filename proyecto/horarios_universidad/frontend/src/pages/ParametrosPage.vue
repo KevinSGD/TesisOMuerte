@@ -9,22 +9,19 @@ const DAY_MAP = { 'Lunes': 0, 'Martes': 1, 'Miércoles': 2, 'Jueves': 3, 'Vierne
 
 function _parseScheduleEvents(records) {
   if (!Array.isArray(records)) return []
-  const eventos = []
-  const materiasMap   = Object.fromEntries(state.materias.map(m  => [m.nombre,  m.id]))
-  const profesoresMap = Object.fromEntries(state.profesores.map(p => [p.nombre,  p.id]))
+  const eventos       = []
+  const materiasMap   = Object.fromEntries(state.materias.map(m  => [m.nombre, m.id]))
+  const profesoresMap = Object.fromEntries(state.profesores.map(p => [p.nombre, p.id]))
   for (let i = 0; i < records.length; i++) {
-    const r = records[i]
-    const dayIndex   = DAY_MAP[r['Día']] ?? 0
-    const bloque     = Number(r['Bloque']) || 0
+    const r        = records[i]
+    const dayIndex = DAY_MAP[r['Día']] ?? 0
+    const bloque   = Number(r['Bloque']) || 0
     const materiaId  = materiasMap[r['Materia']] || null
     const profesorId = profesoresMap[r['Profesor']] || null
     const salon      = r['Salón'] || ''
-
-    // Bug fix: Curso field is a string like "CUR_01-G2" — extract group number
-    const cursoStr = String(r['Curso'] || '')
-    const gMatch   = cursoStr.match(/G(\d+)/i)
-    const grupo    = gMatch ? Number(gMatch[1]) : 1
-
+    const cursoStr   = String(r['Curso'] || '')
+    const gMatch     = cursoStr.match(/G(\d+)/i)
+    const grupo      = gMatch ? Number(gMatch[1]) : 1
     if (!materiaId || !profesorId) continue
     eventos.push({
       id: `evt_${i}_${Date.now()}`,
@@ -35,13 +32,14 @@ function _parseScheduleEvents(records) {
   return eventos
 }
 
-const loading      = ref(false)
-const logMessages  = ref([])
+const loading     = ref(false)
+const logMessages = ref([])
 
 function addLog(msg, type = 'info') {
   logMessages.value.unshift({ msg, type, ts: new Date().toLocaleTimeString('es-CO') })
 }
 
+// ── Resumen expandido con datos de aulas ────────────────────────────────
 const resumen = computed(() => ({
   materias:     state.materias.length,
   profesores:   state.profesores.length,
@@ -85,51 +83,61 @@ async function ejecutarAlgoritmo() {
     try {
       const db = await getDbHealth()
       dbOk = !!db?.ok
-    } catch {
-      dbOk = false
-    }
+    } catch { dbOk = false }
 
     if (dbOk) {
       addLog('Guardando datos en la base de datos...', 'info')
       emit('toast', 'Guardando datos...', 'info')
-
       const materiaIdToNombre = Object.fromEntries(state.materias.map(m => [m.id, m.nombre]))
       await saveData({
         materias: state.materias.map(m => ({
           nombre: m.nombre, creditos: m.creditos, grupos: m.grupos, categoria: m.categoria,
         })),
         profesores: state.profesores.map(p => ({
-          nombre: p.nombre,
-          codigo: p.profesorId,
-          // Send all assigned materias (by name)
+          nombre:      p.nombre,
+          codigo:      p.profesorId,
           materia_ids: (p.materiaIds || []).map(id => materiaIdToNombre[id] || id),
-          materia_id: materiaIdToNombre[(p.materiaIds || [])[0]] || null,
+          materia_id:  materiaIdToNombre[(p.materiaIds || [])[0]] || null,
+          max_horas:   p.maxHoras ?? 40,
         })),
         clear_existing: true,
       })
       addLog('✓ Datos guardados exitosamente', 'success')
     } else {
-      addLog('DB no disponible; se omite guardado y se continua en modo local.', 'info')
+      addLog('DB no disponible; se omite guardado y se continúa en modo local.', 'info')
       emit('toast', 'DB no disponible: se omite guardado.', 'info')
     }
 
     addLog(`Ejecutando solver CP-SAT (timeout: ${state.tiempoSegundos}s)...`, 'info')
     emit('toast', 'Ejecutando algoritmo...', 'info')
 
-    const t0 = Date.now()
+    const t0  = Date.now()
     const out = await runScheduler({
-      seed: 42,
+      seed:             42,
       max_time_seconds: Number(state.tiempoSegundos),
-      use_ui_data: true,
+      use_ui_data:      true,
+      // Capacidades de aulas — nuevos campos para el solver
+      aulas: {
+        capacidad_salon_comun: state.aulas.capacidad_salon_comun,
+        capacidad_salon_pc:    state.aulas.capacidad_salon_pc,
+        num_salones_comunes:   state.aulas.num_salones_comunes,
+        num_salones_pc:        state.aulas.num_salones_pc,
+      },
       materias: state.materias.map(m => ({
-        id: m.id, nombre: m.nombre,
-        codigo: `MAT-${String(m.id).padStart(3, '0')}`,
-        grupos: m.grupos, horas: m.creditos, categoria: m.categoria,
+        id:       m.id,
+        nombre:   m.nombre,
+        codigo:   `MAT-${String(m.id).padStart(3, '0')}`,
+        grupos:   m.grupos,
+        horas:    m.creditos,
+        categoria: m.categoria,
+        demanda:  m.demanda || 0,
       })),
       profesores: state.profesores.map(p => ({
-        id: p.id, nombre: p.nombre, codigo: p.profesorId,
-        // Pass all assigned materia IDs
-        materias: p.materiaIds?.length ? p.materiaIds : [],
+        id:        p.id,
+        nombre:    p.nombre,
+        codigo:    p.profesorId,
+        materias:  p.materiaIds?.length ? p.materiaIds : [],
+        max_horas: p.maxHoras ?? 40,
       })),
     })
 
@@ -150,14 +158,13 @@ async function ejecutarAlgoritmo() {
     }
 
     addLog(`✓ ${eventos.length} clases mapeadas al calendario`, 'success')
-
     resetCalendar()
     setEventos(eventos)
     setLastRun({
-      status: out.status,
-      message: out.message || out.status,
+      status:    out.status,
+      message:   out.message || out.status,
       timestamp: new Date().toISOString(),
-      elapsed: parseFloat(elapsed),
+      elapsed:   parseFloat(elapsed),
     })
 
     emit('toast', `Horario generado: ${eventos.length} clases (${out.status})`, 'success')
@@ -181,7 +188,7 @@ async function ejecutarAlgoritmo() {
         Parámetros del Algoritmo
       </h1>
       <p class="text-body-md text-on-surface-variant mt-2">
-        Configura el tiempo de ejecución y ejecuta el solver de restricciones.
+        Configura salones, tiempo de ejecución y ejecuta el solver de restricciones.
       </p>
     </header>
 
@@ -197,23 +204,128 @@ async function ejecutarAlgoritmo() {
       </div>
     </div>
 
+    <!-- ─── Configuración de Aulas ─── -->
+    <div class="bg-surface-container rounded-xl border-t-2 border-t-secondary border-x border-b border-outline-variant overflow-hidden">
+      <div class="p-6 border-b border-outline-variant flex items-center gap-3">
+        <span class="material-symbols-outlined text-secondary text-[22px]">meeting_room</span>
+        <div>
+          <h2 class="text-headline-sm font-sans text-on-surface">Configuración de Aulas</h2>
+          <p class="text-body-sm text-on-surface-variant mt-0.5">
+            Define la capacidad y cantidad de espacios disponibles para el solver.
+          </p>
+        </div>
+      </div>
+      <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <!-- Salones comunes -->
+        <fieldset class="space-y-3">
+          <legend class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-primary"></span>
+            Salones Convencionales
+          </legend>
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center gap-3">
+              <label for="num-salones-comunes" class="text-body-sm text-on-surface-variant w-28 flex-shrink-0">Cantidad:</label>
+              <input
+                id="num-salones-comunes"
+                v-model.number="state.aulas.num_salones_comunes"
+                type="number" min="0" max="100"
+                class="w-24 bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2
+                       text-label-md font-mono text-on-surface text-center
+                       focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/40"
+              />
+              <span class="text-label-md font-mono text-outline">salones</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <label for="cap-salon-comun" class="text-body-sm text-on-surface-variant w-28 flex-shrink-0">Capacidad:</label>
+              <input
+                id="cap-salon-comun"
+                v-model.number="state.aulas.capacidad_salon_comun"
+                type="number" min="1" max="500"
+                class="w-24 bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2
+                       text-label-md font-mono text-on-surface text-center
+                       focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/40"
+              />
+              <span class="text-label-md font-mono text-outline">estudiantes</span>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Salones PC / laboratorios -->
+        <fieldset class="space-y-3">
+          <legend class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-secondary"></span>
+            Laboratorios de Sistemas
+          </legend>
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center gap-3">
+              <label for="num-salones-pc" class="text-body-sm text-on-surface-variant w-28 flex-shrink-0">Cantidad:</label>
+              <input
+                id="num-salones-pc"
+                v-model.number="state.aulas.num_salones_pc"
+                type="number" min="0" max="100"
+                class="w-24 bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2
+                       text-label-md font-mono text-on-surface text-center
+                       focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/40"
+              />
+              <span class="text-label-md font-mono text-outline">laboratorios</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <label for="cap-salon-pc" class="text-body-sm text-on-surface-variant w-28 flex-shrink-0">Capacidad:</label>
+              <input
+                id="cap-salon-pc"
+                v-model.number="state.aulas.capacidad_salon_pc"
+                type="number" min="1" max="500"
+                class="w-24 bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2
+                       text-label-md font-mono text-on-surface text-center
+                       focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary/40"
+              />
+              <span class="text-label-md font-mono text-outline">estudiantes</span>
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+      <!-- Summary row -->
+      <div class="px-6 pb-5 flex flex-wrap gap-3">
+        <div class="flex items-center gap-2 bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2">
+          <span class="material-symbols-outlined text-primary text-[16px]">domain</span>
+          <span class="text-label-md font-mono text-on-surface-variant">Total:</span>
+          <span class="text-label-md font-mono text-on-surface">
+            {{ state.aulas.num_salones_comunes + state.aulas.num_salones_pc }} espacios
+          </span>
+        </div>
+        <div class="flex items-center gap-2 bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2">
+          <span class="material-symbols-outlined text-secondary text-[16px]">people</span>
+          <span class="text-label-md font-mono text-on-surface-variant">Cap. total:</span>
+          <span class="text-label-md font-mono text-on-surface">
+            {{ (state.aulas.num_salones_comunes * state.aulas.capacidad_salon_comun) +
+               (state.aulas.num_salones_pc * state.aulas.capacidad_salon_pc) }} estudiantes
+          </span>
+        </div>
+      </div>
+    </div>
+
     <!-- ─── Configuración del Solver ─── -->
     <div class="bg-surface-container rounded-xl border-t-2 border-t-primary border-x border-b border-outline-variant overflow-hidden">
-      <div class="p-6 border-b border-outline-variant">
-        <h2 class="text-headline-sm font-sans text-on-surface">Configuración del Solver</h2>
-        <p class="text-body-sm text-on-surface-variant mt-1">
-          El solver CP-SAT encontrará la asignación óptima de clases, salones y horarios.
-        </p>
+      <div class="p-6 border-b border-outline-variant flex items-center gap-3">
+        <span class="material-symbols-outlined text-primary text-[22px]">settings_suggest</span>
+        <div>
+          <h2 class="text-headline-sm font-sans text-on-surface">Configuración del Solver</h2>
+          <p class="text-body-sm text-on-surface-variant mt-0.5">
+            El solver CP-SAT encontrará la asignación óptima de clases, salones y horarios.
+          </p>
+        </div>
       </div>
 
       <div class="p-6 space-y-6">
         <!-- Tiempo máximo -->
         <div class="max-w-xs">
-          <label class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider block mb-2">
-            Tiempo máximo de ejecución (segundos)
+          <label for="tiempo-solver" class="text-label-md font-mono text-on-surface-variant uppercase tracking-wider block mb-2">
+            Tiempo máximo de ejecución
           </label>
           <div class="flex items-center gap-3">
             <input
+              id="tiempo-solver"
               v-model.number="state.tiempoSegundos"
               type="number" min="1" max="600"
               class="w-32 bg-surface-container-lowest border border-outline-variant rounded-lg px-4 py-3
@@ -246,6 +358,7 @@ async function ejecutarAlgoritmo() {
         <div
           v-if="!listo"
           class="flex items-start gap-3 bg-error/10 border border-error/30 rounded-xl px-4 py-3"
+          role="alert"
         >
           <span class="material-symbols-outlined text-error text-[20px] flex-shrink-0 mt-0.5">warning</span>
           <div>
@@ -266,6 +379,9 @@ async function ejecutarAlgoritmo() {
     <div
       v-if="logMessages.length || loading"
       class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden"
+      role="log"
+      aria-live="polite"
+      aria-label="Log de ejecución del solver"
     >
       <div class="px-4 py-3 border-b border-outline-variant bg-surface-container-low flex items-center gap-2">
         <span class="material-symbols-outlined text-outline text-[16px]">terminal</span>
@@ -282,7 +398,7 @@ async function ejecutarAlgoritmo() {
         <div
           v-for="(log, i) in logMessages" :key="i"
           :class="[
-            'flex items-start gap-2 text-[11px] font-mono',
+            'flex items-start gap-2 text-[13px] font-mono',
             log.type === 'error'   ? 'text-error' :
             log.type === 'success' ? 'text-primary' : 'text-on-surface-variant'
           ]"
@@ -290,7 +406,7 @@ async function ejecutarAlgoritmo() {
           <span class="text-outline flex-shrink-0">{{ log.ts }}</span>
           <span>{{ log.msg }}</span>
         </div>
-        <div v-if="loading && !logMessages.length" class="text-[11px] font-mono text-on-surface-variant animate-pulse">
+        <div v-if="loading && !logMessages.length" class="text-[13px] font-mono text-on-surface-variant animate-pulse">
           Inicializando...
         </div>
       </div>
@@ -317,7 +433,7 @@ async function ejecutarAlgoritmo() {
           loading
             ? 'bg-primary-container/50 text-on-surface-variant cursor-not-allowed'
             : listo
-              ? 'bg-primary text-background hover:bg-primary-fixed shadow-[0_0_25px_rgba(78,222,163,0.3)]'
+              ? 'bg-primary text-on-primary hover:bg-primary-fixed shadow-[var(--glow-primary-lg)]'
               : 'bg-surface-container-high text-on-surface-variant border border-outline-variant cursor-not-allowed'
         ]"
       >

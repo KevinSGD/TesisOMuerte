@@ -1,29 +1,25 @@
 <script setup>
 import { computed } from 'vue'
+import { HEX_PALETTE } from '../composables/useEventColors'
 
 const props = defineProps({
   data: { type: Array, default: () => [] },
 })
 
-const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
+const DIAS   = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
 const BLOQUES = Array.from({ length: 11 }, (_, i) => i + 1)
-const HORAS = [
+const HORAS  = [
   '7:00–8:00', '8:00–9:00', '9:00–10:00', '10:00–11:00', '11:00–12:00',
   '12:00–13:00', '13:00–14:00', '14:00–15:00', '15:00–16:00', '16:00–17:00', '17:00–18:00',
 ]
 
-const PALETTE = [
-  '#3b5bdb', '#1098ad', '#2f9e44', '#e67700', '#c2255c',
-  '#6741d9', '#0c8599', '#5c940d', '#d9480f', '#862e9c',
-  '#1864ab', '#087f5b', '#a61e4d', '#343a40', '#495057',
-]
-
+// Shared palette — bright pastels that read on dark navy (#0f1829) background
 const materiaColorMap = computed(() => {
   const map = {}
   let i = 0
   for (const row of props.data) {
     if (!(row.Materia in map)) {
-      map[row.Materia] = PALETTE[i % PALETTE.length]
+      map[row.Materia] = HEX_PALETTE[i % HEX_PALETTE.length]
       i++
     }
   }
@@ -45,6 +41,14 @@ const grid = computed(() => {
 })
 
 const hasData = computed(() => props.data.length > 0)
+
+// Convert hex to rgba for subtle chip background (10% opacity)
+function chipBg(hex) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r},${g},${b},0.10)`
+}
 </script>
 
 <template>
@@ -75,9 +79,14 @@ const hasData = computed(() => props.data.length > 0)
                 v-for="(cls, ci) in grid[dia][idx + 1]"
                 :key="ci"
                 class="cls-chip"
-                :style="{ borderLeftColor: materiaColorMap[cls.Materia] }"
+                :style="{
+                  borderLeftColor: materiaColorMap[cls.Materia],
+                  background: chipBg(materiaColorMap[cls.Materia]),
+                }"
               >
-                <div class="cls-materia">{{ cls.Materia }}</div>
+                <div class="cls-materia" :style="{ color: materiaColorMap[cls.Materia] }">
+                  {{ cls.Materia }}
+                </div>
                 <div class="cls-meta">{{ cls.Profesor }}</div>
                 <div class="cls-meta">{{ cls.Salón }} · {{ cls.Curso }}</div>
               </div>
@@ -87,11 +96,12 @@ const hasData = computed(() => props.data.length > 0)
       </table>
     </div>
 
-    <div v-if="hasData" class="cal-legend">
+    <div v-if="hasData" class="cal-legend" role="list" aria-label="Leyenda de materias">
       <div
         v-for="(color, materia) in materiaColorMap"
         :key="materia"
         class="legend-item"
+        role="listitem"
       >
         <span class="legend-dot" :style="{ background: color }" />
         {{ materia }}
@@ -101,20 +111,18 @@ const hasData = computed(() => props.data.length > 0)
 </template>
 
 <style scoped>
-.cal-wrap {
-  width: 100%;
-}
+.cal-wrap { width: 100%; }
 
 .cal-empty {
   text-align: center;
   padding: 40px;
-  color: var(--muted);
+  color: #86948a;
 }
 
 .cal-scroll {
   overflow-x: auto;
-  border-radius: 10px;
-  border: 1px solid var(--line);
+  border-radius: 12px;
+  border: 1px solid #3c4a42;
 }
 
 .cal-table {
@@ -128,10 +136,10 @@ const hasData = computed(() => props.data.length > 0)
   width: 90px;
   padding: 10px 8px;
   text-align: left;
-  color: var(--muted);
-  background: #0f1022;
+  color: #86948a;
+  background: #0f1829;
   font-weight: 600;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid #3c4a42;
   white-space: nowrap;
 }
 
@@ -139,17 +147,18 @@ const hasData = computed(() => props.data.length > 0)
   padding: 10px 8px;
   text-align: center;
   font-weight: 700;
-  background: #0f1022;
-  border-bottom: 1px solid var(--line);
-  border-left: 1px solid var(--line);
+  color: #dae2fd;
+  background: #0f1829;
+  border-bottom: 1px solid #3c4a42;
+  border-left: 1px solid #3c4a42;
   letter-spacing: 0.3px;
 }
 
 .td-hora {
   padding: 8px;
   vertical-align: top;
-  background: #0c0d1f;
-  border-bottom: 1px solid var(--line);
+  background: #090f1c;
+  border-bottom: 1px solid #3c4a42;
   white-space: nowrap;
   min-width: 90px;
 }
@@ -157,46 +166,46 @@ const hasData = computed(() => props.data.length > 0)
 .hora-num {
   display: block;
   font-weight: 700;
-  color: var(--primary);
+  color: #35c98a;
   font-size: 0.72rem;
 }
 
 .hora-str {
-  color: var(--muted);
+  color: #86948a;
   font-size: 0.68rem;
 }
 
 .td-cell {
   padding: 4px;
   vertical-align: top;
-  border-bottom: 1px solid var(--line);
-  border-left: 1px solid var(--line);
+  border-bottom: 1px solid #3c4a42;
+  border-left: 1px solid #3c4a42;
   min-width: 130px;
-  background: var(--card);
+  background: #171f33;
 }
 
 .td-cell--empty {
-  background: #0e0f25;
+  background: #0f1829;
 }
 
 .cls-chip {
-  border-left: 3px solid var(--primary);
-  background: rgba(111, 124, 255, 0.08);
+  border-left: 3px solid #35c98a;
   border-radius: 6px;
   padding: 5px 7px;
   margin-bottom: 3px;
+  transition: filter 0.15s;
 }
+.cls-chip:hover { filter: brightness(1.15); }
 
 .cls-materia {
   font-weight: 600;
-  color: var(--text);
   font-size: 0.74rem;
   line-height: 1.3;
   margin-bottom: 2px;
 }
 
 .cls-meta {
-  color: var(--muted);
+  color: #bbcabf;
   font-size: 0.66rem;
   line-height: 1.3;
 }
@@ -206,10 +215,10 @@ const hasData = computed(() => props.data.length > 0)
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 14px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg-soft);
+  padding: 12px 14px;
+  border: 1px solid #3c4a42;
+  border-radius: 12px;
+  background: #171f33;
 }
 
 .legend-item {
@@ -217,13 +226,14 @@ const hasData = computed(() => props.data.length > 0)
   align-items: center;
   gap: 6px;
   font-size: 0.75rem;
-  color: var(--muted);
+  color: #bbcabf;
 }
 
+/* rounded-full = 9999px in tokens, so this mirrors it */
 .legend-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: 9999px;
   flex-shrink: 0;
 }
 </style>

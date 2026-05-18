@@ -17,22 +17,47 @@ const defaults = {
   tiempoSegundos: 10,
   salonFilter: null,
   lastRun: null, // { status, message, timestamp, elapsed }
+  // Classroom capacity configuration for the solver
+  aulas: {
+    capacidad_salon_comun: 40,
+    capacidad_salon_pc:    30,
+    num_salones_comunes:   6,
+    num_salones_pc:        4,
+  },
   calendario: {
-    dias: ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'],
-    horas: ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
+    dias:    ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'],
+    horas:   ['06:00', '07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
     eventos: [],
   },
 }
 
 const loaded = loadState()
 
-// Migrate existing data: materiaId (single) → materiaIds (array)
+// ── Migrations ──────────────────────────────────────────────────────────────
+
+// v1→v2: materiaId (single) → materiaIds (array)
 if (loaded?.profesores) {
   for (const p of loaded.profesores) {
     if (!p.materiaIds) {
       p.materiaIds = p.materiaId ? [p.materiaId] : []
     }
+    // v2→v3: add maxHoras if missing
+    if (p.maxHoras === undefined) p.maxHoras = 40
   }
+}
+
+// v2→v3: add demanda / autoGrupos / capacidadGrupo to materias
+if (loaded?.materias) {
+  for (const m of loaded.materias) {
+    if (m.demanda      === undefined) m.demanda      = 0
+    if (m.autoGrupos   === undefined) m.autoGrupos   = false
+    if (m.capacidadGrupo === undefined) m.capacidadGrupo = 30
+  }
+}
+
+// v2→v3: add aulas block if missing
+if (loaded && !loaded.aulas) {
+  loaded.aulas = { ...defaults.aulas }
 }
 
 export const state = reactive({
@@ -44,30 +69,36 @@ watch(
   state,
   () => {
     saveState({
-      step: state.step,
-      nextMatId: state.nextMatId,
-      nextProfId: state.nextProfId,
-      materias: state.materias,
-      profesores: state.profesores,
+      step:           state.step,
+      nextMatId:      state.nextMatId,
+      nextProfId:     state.nextProfId,
+      materias:       state.materias,
+      profesores:     state.profesores,
       tiempoSegundos: state.tiempoSegundos,
-      salonFilter: state.salonFilter,
-      lastRun: state.lastRun,
-      calendario: state.calendario,
+      salonFilter:    state.salonFilter,
+      lastRun:        state.lastRun,
+      aulas:          state.aulas,
+      calendario:     state.calendario,
     })
   },
   { deep: true },
 )
 
+// ── Mutations ───────────────────────────────────────────────────────────────
+
 export function ensureMateriasCount(n) {
   const target = Math.max(0, Number(n) || 0)
   while (state.materias.length < target) {
     state.materias.push({
-      id: nextId('nextMatId'),
-      nombre: '',
-      creditos: 3,
-      grupos: 1,
-      categoria: 'Software',
-      editing: true,
+      id:             nextId('nextMatId'),
+      nombre:         '',
+      creditos:       3,
+      grupos:         1,
+      categoria:      'Software',
+      demanda:        0,
+      autoGrupos:     false,
+      capacidadGrupo: 30,
+      editing:        true,
     })
   }
   while (state.materias.length > target) {
@@ -79,11 +110,12 @@ export function ensureProfesoresCount(n) {
   const target = Math.max(0, Number(n) || 0)
   while (state.profesores.length < target) {
     state.profesores.push({
-      id: nextId('nextProfId'),
-      nombre: '',
+      id:         nextId('nextProfId'),
+      nombre:     '',
       profesorId: '',
       materiaIds: [],
-      editing: true,
+      maxHoras:   40,
+      editing:    true,
     })
   }
   while (state.profesores.length > target) {
@@ -93,12 +125,15 @@ export function ensureProfesoresCount(n) {
 
 export function addMateria() {
   state.materias.push({
-    id: nextId('nextMatId'),
-    nombre: '',
-    creditos: 3,
-    grupos: 1,
-    categoria: 'Software',
-    editing: true,
+    id:             nextId('nextMatId'),
+    nombre:         '',
+    creditos:       3,
+    grupos:         1,
+    categoria:      'Software',
+    demanda:        0,
+    autoGrupos:     false,
+    capacidadGrupo: state.aulas.capacidad_salon_comun,
+    editing:        true,
   })
 }
 
@@ -111,11 +146,12 @@ export function removeMateria(id) {
 
 export function addProfesor() {
   state.profesores.push({
-    id: nextId('nextProfId'),
-    nombre: '',
+    id:         nextId('nextProfId'),
+    nombre:     '',
     profesorId: '',
     materiaIds: [],
-    editing: true,
+    maxHoras:   40,
+    editing:    true,
   })
 }
 
@@ -148,7 +184,7 @@ export function upsertEvento(evento) {
 export function moveEvento(eventoId, dayIndex, hourIndex) {
   const e = state.calendario.eventos.find((x) => x.id === eventoId)
   if (!e) return
-  e.dayIndex = dayIndex
+  e.dayIndex  = dayIndex
   e.hourIndex = hourIndex
 }
 
@@ -162,10 +198,10 @@ export function setLastRun(result) {
 
 export function generateDemoSchedule() {
   const eventos = []
-  const dias = state.calendario.dias.length
-  const horas = state.calendario.horas.length
+  const dias    = state.calendario.dias.length
+  const horas   = state.calendario.horas.length
 
-  const mats = state.materias.filter((m) => (m.nombre || '').trim())
+  const mats  = state.materias.filter((m) => (m.nombre || '').trim())
   const profs = state.profesores.filter((p) => (p.nombre || '').trim())
   if (!mats.length || !profs.length) return []
 
@@ -173,15 +209,15 @@ export function generateDemoSchedule() {
   for (const m of mats) {
     const grupos = Math.max(1, Number(m.grupos) || 1)
     for (let g = 1; g <= grupos; g++) {
-      const p = profs[k % profs.length]
+      const p        = profs[k % profs.length]
       const dayIndex = k % dias
       const hourIndex = (k * 2) % horas
       eventos.push({
-        id: `evt_demo_${m.id}_${p.id}_${g}_${k}`,
-        materiaId: m.id,
+        id:         `evt_demo_${m.id}_${p.id}_${g}_${k}`,
+        materiaId:  m.id,
         profesorId: p.id,
-        salon: `A-${(k % 20) + 101}`,
-        grupo: g,
+        salon:      `A-${(k % 20) + 101}`,
+        grupo:      g,
         dayIndex,
         hourIndex,
       })
