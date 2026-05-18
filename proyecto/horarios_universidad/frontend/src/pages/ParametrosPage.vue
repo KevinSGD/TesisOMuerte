@@ -100,7 +100,7 @@ async function ejecutarAlgoritmo() {
           materia_id:  materiaIdToNombre[(p.materiaIds || [])[0]] || null,
           max_horas:   p.maxHoras ?? 40,
         })),
-        clear_existing: true,
+        clear_existing: false,
       })
       addLog('✓ Datos guardados exitosamente', 'success')
     } else {
